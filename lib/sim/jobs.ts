@@ -33,8 +33,35 @@ export class JobMachine {
   private seq = 0;
   /** Cross-level shuffles: which carrier currently has the car. */
   private readonly shufflePhase = new Map<string, 'a' | 'lift' | 'b'>();
+  private readonly host: JobHost;
+  /** Retrieve lift choice: any free reachable lift, or only the shaft nearest the column. */
+  retrieveLiftPolicy: 'any' | 'nearest' = 'any';
 
-  constructor(private readonly host: JobHost) {}
+  constructor(host: JobHost) {
+    this.host = host;
+  }
+
+  private nearestShaftIndex(col: number): number {
+    const zone = zoneOfCol(this.cfg, col);
+    let best = -1;
+    let bestD = Infinity;
+    for (const s of zoneShafts(this.cfg, zone)) {
+      const d = corridorDistance(this.cfg, s.index, col);
+      if (d < bestD) {
+        bestD = d;
+        best = s.index;
+      }
+    }
+    return best;
+  }
+
+  private retrieveLiftWant(level: number, col: number): Want {
+    if (this.retrieveLiftPolicy === 'any') return this.liftWant(level, col);
+    const idx = this.nearestShaftIndex(col);
+    const id = `lift-${shaftByIndex(this.cfg, idx).id}`;
+    const base = this.liftWant(level, col);
+    return { ...base, score: (r) => (r.id === id ? 0 : Infinity), only: id };
+  }
 
   private get cfg(): FacilityConfig {
     return this.host.cfg;
@@ -309,7 +336,7 @@ export class JobMachine {
         v.slotKey = null;
         v.state = 'in_system';
         this.setStage(job, 'lift_wait', null);
-        rm.request({ jobId: job.id, wants: [this.liftWant(slot.level, slot.col)], priority: job.priority, createdAt: t });
+        rm.request({ jobId: job.id, wants: [this.retrieveLiftWant(slot.level, slot.col)], priority: job.priority, createdAt: t });
         return false;
       }
       case 'corridor_out':

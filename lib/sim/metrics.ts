@@ -57,9 +57,12 @@ export class RingStats {
 export class RollingRate {
   private times: number[] = [];
   private start = 0;
+  private readonly windowSeconds: number;
   peakPerHour = 0;
 
-  constructor(private readonly windowSeconds: number) {}
+  constructor(windowSeconds: number) {
+    this.windowSeconds = windowSeconds;
+  }
 
   push(t: number): void {
     this.times.push(t);

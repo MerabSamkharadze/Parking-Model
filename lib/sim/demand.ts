@@ -79,14 +79,16 @@ const LETTERS = 'ABCDEFGHJKLMNOPQRSTUVWXYZ';
 
 /** Vehicle factory + arrival sampling; all randomness from the seeded rng. */
 export class DemandGenerator {
+  readonly profile: DemandProfile;
+  readonly cfg: FacilityConfig;
+  private readonly rng: Rng;
   private readonly scale: number;
   private readonly departureWeights: number[];
 
-  constructor(
-    readonly profile: DemandProfile,
-    readonly cfg: FacilityConfig,
-    private readonly rng: Rng,
-  ) {
+  constructor(profile: DemandProfile, cfg: FacilityConfig, rng: Rng) {
+    this.profile = profile;
+    this.cfg = cfg;
+    this.rng = rng;
     this.scale = demandScale(cfg);
     this.departureWeights = profile.hourly.map((h) => h.departures);
   }

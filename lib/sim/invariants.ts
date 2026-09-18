@@ -3,19 +3,14 @@
 
 import { zoneRange } from '../geometry.ts';
 import type { ResourceManager } from './resources.ts';
-import type { FacilityConfig, Job, JobStage, Slot, Vehicle } from './types.ts';
+import type { FacilityConfig, Job, JobKind, JobStage, Slot, Vehicle } from './types.ts';
 
-const MOVING: ReadonlySet<JobStage> = new Set<JobStage>([
-  'to_lift',
-  'lift_move',
-  'shuttle_wait',
-  'handover',
-  'corridor',
-  'corridor_out',
-  'lift_up',
-  'bay_wait',
-  'bay_out',
-]);
+/** Stages in which the car is on a carrier (bay transfer, lift or shuttle), per job kind. */
+const ON_CARRIER: Record<JobKind, ReadonlySet<JobStage>> = {
+  store: new Set<JobStage>(['to_lift', 'lift_move', 'shuttle_wait', 'handover', 'corridor', 'insert']),
+  retrieve: new Set<JobStage>(['corridor_out', 'handover', 'lift_up', 'bay_wait', 'bay_out']),
+  shuffle: new Set<JobStage>(['corridor_out', 'handover', 'lift_move', 'corridor', 'insert']),
+};
 
 export class InvariantError extends Error {}
 
@@ -63,9 +58,9 @@ export function assertInvariants(
 
   // (3) a moving vehicle is not in a slot
   for (const j of jobs.values()) {
-    if (MOVING.has(j.stage)) {
+    if (ON_CARRIER[j.kind].has(j.stage) || (j.kind === 'retrieve' && j.stage === 'lift_wait' && j.resources.lift)) {
       const v = vehicles.get(j.vehicleId);
-      if (v && v.slotKey) fail(`t=${t}: ${v.id} moving (${j.stage}) while in ${v.slotKey}`);
+      if (v && v.slotKey) fail(`t=${t}: ${v.id} moving (${j.kind}/${j.stage}) while in ${v.slotKey}`);
     }
   }
 

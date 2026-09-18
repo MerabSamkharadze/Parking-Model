@@ -25,6 +25,8 @@ export interface Want {
   zone?: number; // shuttles: exact zone; lifts: any shaft facing this zone
   /** Lower is better; picks among free candidates. */
   score?: (r: ResourceState) => number;
+  /** Restrict to one specific resource id. */
+  only?: string;
 }
 
 export interface Request {
@@ -49,9 +51,11 @@ export class ResourceManager {
   private pending: Request[] = [];
   private seq = 0;
   private lastBucketMinute = 0;
+  private readonly cfg: FacilityConfig;
   dirty = false;
 
-  constructor(private readonly cfg: FacilityConfig) {
+  constructor(cfg: FacilityConfig) {
+    this.cfg = cfg;
     const lay = layout(cfg);
     for (let i = 0; i < cfg.baysIn; i++) this.add({ id: `in-${i + 1}`, kind: 'bay_in' }, 0);
     for (let i = 0; i < cfg.baysOut; i++) this.add({ id: `out-${i + 1}`, kind: 'bay_out' }, 0);
@@ -145,6 +149,7 @@ export class ResourceManager {
       if (r.kind !== w.kind || r.busyWith || r.down || taken.has(r.id)) continue;
       if (w.level !== undefined && r.level !== w.level) continue;
       if (w.zone !== undefined && r.zone !== w.zone) continue;
+      if (w.only !== undefined && r.id !== w.only) continue;
       out.push(r);
     }
     return out;
@@ -240,12 +245,26 @@ export class ResourceManager {
     return Math.abs(this.positionOf(r, t) - pos) < 1e-6;
   }
 
-  /** Idle lifts return to the surface (DECISIONS E4). */
-  parkIdleLifts(t: number): void {
+  /**
+   * Idle positioning (DECISIONS E4): every idle resource has a rest target —
+   * lifts the surface (or a level with a pending retrieve), shuttles the
+   * centre of their zone. Idle moves are interruptible: a grant re-commands
+   * the resource from wherever it is.
+   */
+  parkIdle(t: number, target: (r: ResourceState) => number | null): void {
     for (const r of this.resources) {
-      if (r.kind !== 'lift' || r.busyWith || r.down) continue;
-      if (r.pos !== 0 && (!r.move || r.move.to !== 0)) this.moveTo(r, 0, t);
+      if (r.busyWith || r.down || (r.kind !== 'lift' && r.kind !== 'shuttle')) continue;
+      const goal = target(r);
+      if (goal === null) continue;
+      const heading = r.move && r.move.end > t ? r.move.to : r.pos;
+      if (Math.abs(heading - goal) > 1e-6) this.moveTo(r, goal, t);
     }
+  }
+
+  /** Centre of a zone's slot field: the shuttle's rest position. */
+  zoneCentre(zone: number): number {
+    const l = layout(this.cfg);
+    return l.zoneStartX[zone] + (l.colsPerZone[zone] * this.cfg.pitch) / 2;
   }
 
   /** Freeze the motion of frozen resources by one tick (failure / power loss). */
