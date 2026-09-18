@@ -1,0 +1,4 @@
+# Build-script policy (pnpm 12). unrs-resolver ships a prebuilt darwin-arm64
+# binding, so its napi postinstall fallback is not needed.
+allowBuilds:
+  unrs-resolver: false
