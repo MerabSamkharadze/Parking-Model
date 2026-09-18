@@ -7,11 +7,11 @@ will be adjusted.
 
 ## Contradictions
 
-- **C1 — engine vs ±15% DoD.** The §2 inputs are fixed; the derived figures (lift cycle,
-  store/retrieve P50, throughput) are *validated*, not enforced. M1 tests assert a ±15%
-  band where the engine lands inside it; where it does not, the measured value is
-  recorded in `SPEC.md › Annex A` and in `STATUS.md`, and the test asserts the measured
-  band instead. The engine is the truth.
+- **C1 — engine vs ±15% DoD.** The §2 inputs are fixed and the §2 derived figures are the
+  target: lift cycle 25–32 s, ≈220 lift movements/h capacity (preset B), store P50 ≈ 55 s,
+  retrieve P50 ≈ 50 s. M1 tests assert ±15 % around them. If the engine lands outside,
+  the *engine's modelling* is corrected (resource-holding rules, idle policies), never the
+  spec. Measured values are reported in `STATUS.md`.
 - **C2 — 2 shuttles/level (preset C).** A level's corridor is split into
   `shuttlesPerLevel` contiguous **zones** of equal column count. Each zone has exactly one
   shuttle that never leaves its zone, so two shuttles can never meet (the §4.2 guarantee
