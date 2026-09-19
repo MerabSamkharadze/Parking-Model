@@ -1,10 +1,10 @@
-// SPEC §8 control-panel blocks 1–9 (M3/M4); compare (M5) and failures (M6)
-// are still to come.
+// SPEC §8 control-panel blocks 1–10.
 
 import type { ComponentType } from 'react';
 import { DemandForm } from '@/components/panel/DemandForm';
 import { EventLog } from '@/components/panel/EventLog';
 import { FacilityForm } from '@/components/panel/FacilityForm';
+import { FailurePanel } from '@/components/panel/FailurePanel';
 import { IndexTable } from '@/components/panel/IndexTable';
 import { LiveState } from '@/components/panel/LiveState';
 import { RunControl } from '@/components/panel/RunControl';
@@ -24,6 +24,7 @@ const CONTENT: Partial<Record<(typeof BLOCKS)[number], ComponentType>> = {
   Telemetry: Telemetry,
   Index: IndexTable,
   'Event log': EventLog,
+  Failures: FailurePanel,
 };
 
 export function PanelRail() {

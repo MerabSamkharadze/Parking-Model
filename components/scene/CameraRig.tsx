@@ -6,7 +6,7 @@
 
 import { OrbitControls } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
-import { useEffect, useRef, type ComponentRef } from 'react';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { Vector3 } from 'three';
 import { bayPosition, bounds, layout, levelY, parseSlotKey, slotPosition } from '@/lib/geometry';
 import type { FacilityConfig } from '@/lib/sim/types';
@@ -121,6 +121,19 @@ export function cameraGoal(
   }
 }
 
+/** `prefers-reduced-motion: reduce` → camera cuts instead of flying (SPEC §10 M6). */
+export function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReduced(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+  return reduced;
+}
+
 export function CameraRig({
   cfg,
   preset,
@@ -139,6 +152,7 @@ export function CameraRig({
   const aspect = useThree((s) => s.viewport.aspect);
   const aspectRef = useRef(aspect);
   aspectRef.current = aspect;
+  const reduced = useReducedMotion();
 
   // A new goal only when the preset / selection changes: a viewport resize
   // must not yank the camera away from where the user left it.
@@ -153,7 +167,7 @@ export function CameraRig({
     const c = controls.current;
     const g = goal.current;
     if (!c || !g.active) return;
-    const k = 1 - Math.exp(-Math.min(dt, 0.1) * 4);
+    const k = reduced ? 1 : 1 - Math.exp(-Math.min(dt, 0.1) * 4);
     c.object.position.lerp(g.pos, k);
     c.target.lerp(g.target, k);
     if (c.object.position.distanceToSquared(g.pos) < 0.01 && c.target.distanceToSquared(g.target) < 0.01) g.active = false;
@@ -164,7 +178,7 @@ export function CameraRig({
     <OrbitControls
       ref={controls}
       makeDefault
-      enableDamping
+      enableDamping={!reduced}
       dampingFactor={0.08}
       minDistance={4}
       maxDistance={260}

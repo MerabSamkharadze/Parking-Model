@@ -21,7 +21,7 @@ const PLATE = 0.16;
 
 export function LiftPlatform({ cfg, liftId, palette }: { cfg: FacilityConfig; liftId: string; palette: Palette }) {
   const group = useRef<Group>(null);
-  const down = useSimStore((s) => s.resourcesById.get(liftId)?.down ?? false);
+  const down = useSimStore((s) => (s.resourcesById.get(liftId)?.down ?? false) || (s.snapshot?.failures.power ?? false));
   const color = down ? palette.clay : palette.amber;
   useFrame(() => {
     const g = group.current;

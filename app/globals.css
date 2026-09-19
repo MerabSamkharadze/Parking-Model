@@ -64,6 +64,12 @@ h3 {
   letter-spacing: -0.02em;
 }
 
+/* Keyboard focus is visible everywhere (SPEC §10 M6). */
+:focus-visible {
+  outline: 1px solid var(--amber);
+  outline-offset: 2px;
+}
+
 /* Mono is for identifiers and numbers only; tabular figures keep widths stable
    while values update (no layout shift, SPEC §10 M4). */
 .font-mono {

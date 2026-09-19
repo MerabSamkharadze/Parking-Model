@@ -71,6 +71,9 @@ interface SimState {
   // --- commands (SPEC §8.5) ---
   addVehicle: (tenant?: 'visitor' | 'resident') => void;
   callVehicle: (vehicleId?: string) => void;
+  // --- failures (SPEC §8.10, §4.5) ---
+  setFailure: (kind: 'lift' | 'shuttle' | 'power', id: string | null, down: boolean) => void;
+  recoverAll: () => void;
   // --- saved versions, share, compare (SPEC §5, M5) ---
   versions: SavedVersion[];
   /** Reads `?v=` and localStorage once, before the first engine (client only). */
@@ -302,6 +305,18 @@ export const useSimStore = create<SimState>((set, get) => {
       const { engine } = get();
       if (!engine) return;
       engine.callVehicle(vehicleId);
+      get().setSnapshot(engine.snapshot());
+    },
+    setFailure: (kind, id, down) => {
+      const { engine } = get();
+      if (!engine) return;
+      engine.setFailure(kind, id, down);
+      get().setSnapshot(engine.snapshot());
+    },
+    recoverAll: () => {
+      const { engine } = get();
+      if (!engine) return;
+      engine.recoverAll();
       get().setSnapshot(engine.snapshot());
     },
   };

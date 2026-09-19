@@ -132,6 +132,16 @@ will be adjusted.
   engine files import each other with explicit `.ts` extensions and use `import type`
   for types (`verbatimModuleSyntax` is on so `tsc` enforces it).
 
+## User overrides
+
+- **U1 — presentation grade (2026-09-19).** The user asked for a realistic, presentable
+  showcase: real car models found on the internet (licence-clean), breathtaking detail,
+  and animation that explains the idea to a first-time viewer — the facility fits malls,
+  large buildings and residential courtyards and solves the city's parking problem. This
+  overrides SPEC §12 ("no GLTF, everything from primitives") for cars and raises the
+  visual bar of §7/§9 without dropping the dark industrial identity. Delivered as M7
+  (see STATUS.md); CC0 assets only, with a size budget so the M6 Lighthouse scores hold.
+
 ## Scene / UI (applied from M2 on)
 
 - **S1** drei: `OrbitControls`, `Instances`, `Text` allowed; `Environment` not used.
@@ -248,5 +258,13 @@ will be adjusted.
   the wall time is the slowest version, not the sum. The best value per metric is amber;
   ties highlight nothing. The candidates are the unsaved custom setup, A–D and the saved
   versions; the scene keeps showing the active one.
+- **S31 — M6 polish.** Shortcuts (`space`, `1`–`4`, `/`, `esc`) live in one global
+  listener that ignores keystrokes inside fields. `prefers-reduced-motion` makes camera
+  goals cuts (no lerp, no orbit damping) and is honoured by every CSS transition
+  (`motion-reduce:`). `:focus-visible` is a 1 px amber outline everywhere. Power loss
+  colours every lift and shuttle clay (frozen), a failed resource only itself; the header
+  shows a clay `degraded` badge. Touch targets are ≥ 24 px (steppers 24, switches 24 × 40)
+  — Lighthouse accessibility 100 / best practices 100 on the production build.
+  Lighthouse is run with `npx lighthouse@12` (a tool, not a dependency — S10).
 - **M0** header name "AVP Simulator"; header 48 px, timeline 96 px; English UI; stacked
   layout under 1024 px; TypeScript 5.9 and Next 15.5 pinned.

@@ -65,6 +65,9 @@ export function RunControl() {
           Reset
         </button>
       </div>
+      <p className="text-[11px] text-ink-soft">
+        <kbd className="font-mono">space</kbd> play / pause · <kbd className="font-mono">1–4</kbd> views · <kbd className="font-mono">/</kbd> search · <kbd className="font-mono">esc</kbd> clear
+      </p>
     </div>
   );
 }

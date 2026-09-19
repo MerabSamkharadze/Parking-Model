@@ -108,7 +108,7 @@ export function IndexTable() {
         <span className="text-right">dwell</span>
       </div>
       <div ref={viewport} className="overflow-y-auto" style={{ height: VIEW_H }} onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)} role="listbox" aria-label="Cars in the system">
-        <div style={{ height: visible.length * ROW_H, position: 'relative' }}>
+        <div role="presentation" style={{ height: visible.length * ROW_H, position: 'relative' }}>
           {visible.slice(first, last).map((r, i) => {
             const active = r.id === selectedVehicleId;
             return (

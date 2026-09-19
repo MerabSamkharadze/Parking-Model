@@ -44,12 +44,12 @@ export function VersionPicker() {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-col" role="listbox" aria-label="Versions">
+      <div className="flex flex-col" aria-label="Versions">
         {PRESET_IDS.map((id) => {
           const p = PRESETS[id];
           const active = !custom && config.id === id;
           return (
-            <button key={id} type="button" role="option" aria-selected={active} className={rowClass(active)} onClick={() => setPreset(id)}>
+            <button key={id} type="button" aria-pressed={active} className={rowClass(active)} onClick={() => setPreset(id)}>
               <span className="w-4 font-mono">{id}</span>
               <span>{p.label}</span>
             </button>
@@ -59,19 +59,19 @@ export function VersionPicker() {
           const active = activeSaved === v.id;
           return (
             <div key={v.id} className="flex items-stretch">
-              <button type="button" role="option" aria-selected={active} className={`${rowClass(active)} min-w-0 flex-1`} onClick={() => loadSaved(v.id)}>
+              <button type="button" aria-pressed={active} className={`${rowClass(active)} min-w-0 flex-1`} onClick={() => loadSaved(v.id)}>
                 <span className="w-4 font-mono">·</span>
                 <span className="truncate">{v.label}</span>
                 <span className="ml-auto font-mono text-[10px] text-ink-soft">from {v.config.derivedFrom ?? v.config.id}</span>
               </button>
-              <button type="button" aria-label={`Delete ${v.label}`} className="px-2 text-xs text-ink-soft hover:text-clay" onClick={() => deleteSaved(v.id)}>
+              <button type="button" aria-label={`Delete ${v.label}`} className="w-6 text-xs text-ink-soft hover:text-clay" onClick={() => deleteSaved(v.id)}>
                 ×
               </button>
             </div>
           );
         })}
         {custom && activeSaved === null && (
-          <div role="option" aria-selected className={rowClass(true)}>
+          <div className={rowClass(true)}>
             <span className="w-4 font-mono">·</span>
             <span>{versionLabel(config)}</span>
             <span className="ml-auto text-[10px] text-ink-soft">unsaved</span>

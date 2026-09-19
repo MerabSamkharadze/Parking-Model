@@ -13,10 +13,10 @@ export function Toggle({ label, checked, onChange, disabled = false }: { label: 
         aria-label={label}
         disabled={disabled}
         onClick={() => onChange(!checked)}
-        className={`relative h-4 w-7 shrink-0 rounded-full border transition-colors ${checked ? 'border-amber bg-amber/20' : 'border-line bg-void'}`}
+        className={`relative h-6 w-10 shrink-0 rounded-full border transition-colors ${checked ? 'border-amber bg-amber/20' : 'border-line bg-void'}`}
       >
         <span
-          className={`absolute top-0.5 h-[10px] w-[10px] rounded-full transition-transform motion-reduce:transition-none ${checked ? 'translate-x-[15px] bg-amber' : 'translate-x-[2px] bg-ink-soft'}`}
+          className={`absolute top-[3px] h-4 w-4 rounded-full transition-transform motion-reduce:transition-none ${checked ? 'translate-x-[19px] bg-amber' : 'translate-x-[3px] bg-ink-soft'}`}
         />
       </button>
     </label>

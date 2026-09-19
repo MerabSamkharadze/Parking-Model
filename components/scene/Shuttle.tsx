@@ -18,7 +18,7 @@ export const SHUTTLE_SIZE = { x: 4.6, y: SHUTTLE_HEIGHT, z: 2.0 } as const;
 export function Shuttle({ cfg, shuttleId, level, palette, dimmed }: { cfg: FacilityConfig; shuttleId: string; level: number; palette: Palette; dimmed: boolean }) {
   const mesh = useRef<Mesh>(null);
   const mat = useRef<MeshStandardMaterial>(null);
-  const down = useSimStore((s) => s.resourcesById.get(shuttleId)?.down ?? false);
+  const down = useSimStore((s) => (s.resourcesById.get(shuttleId)?.down ?? false) || (s.snapshot?.failures.power ?? false));
   useEffect(() => {
     const m = mat.current;
     if (!m) return;

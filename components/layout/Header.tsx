@@ -2,6 +2,7 @@
 
 // SPEC §7: facility name · version · sim clock (live from the snapshot).
 
+import { Badge } from '@/components/ui/Badge';
 import { clockOf } from '@/lib/format';
 import { versionLabel } from '@/lib/presets';
 import { useSimStore } from '@/store/useSimStore';
@@ -11,6 +12,7 @@ export function Header() {
   const clock = useSimStore((s) => (s.snapshot ? clockOf(s.snapshot.secondsOfDay) : '00:00'));
   const day = useSimStore((s) => s.snapshot?.day ?? 0);
   const running = useSimStore((s) => s.running);
+  const degraded = useSimStore((s) => s.snapshot?.metrics.degraded ?? false);
   return (
     <header className="shell-header flex items-center gap-3 overflow-hidden border-b border-line bg-panel px-4 text-sm whitespace-nowrap">
       <h1 className="shrink-0 text-base">AVP Simulator</h1>
@@ -26,6 +28,11 @@ export function Header() {
         {clock}
       </time>
       {!running && <span className="shrink-0 text-xs text-ink-soft max-sm:hidden">paused</span>}
+      {degraded && (
+        <Badge tone="clay" className="shrink-0">
+          degraded
+        </Badge>
+      )}
     </header>
   );
 }

@@ -1,7 +1,7 @@
 // Headless-Chrome screenshot driver (no dependencies: Node 22 WebSocket + CDP).
 //
 //   node scripts/screenshot.mjs <url> <steps.js> [outDir]
-//   env: W=1440 H=900 DPR=1 CHROME=/path/to/chrome SETTLE=2500
+//   env: W=1440 H=900 DPR=1 CHROME=/path/to/chrome SETTLE=2500 FORMAT=png|jpeg
 //
 // <steps.js> runs inside this process with `evaluate(js)`, `shot(name, clip?)`,
 // `wait(ms)`, `waitFor(js)` and `send(method, params)`; its return value is printed with the
@@ -89,9 +89,10 @@ const evaluate = async (expression) => {
   if (r.exceptionDetails) throw new Error('page error: ' + (r.exceptionDetails.exception?.description ?? JSON.stringify(r.exceptionDetails)));
   return r.result.value;
 };
-const shot = async (name, clip) => {
-  const r = await send('Page.captureScreenshot', { format: 'png', ...(clip ? { clip: { ...clip, scale: 1 } } : {}) });
-  const file = join(outDir, `${name}.png`);
+const shot = async (name, clip, opts = {}) => {
+  const format = opts.format ?? process.env.FORMAT ?? 'png';
+  const r = await send('Page.captureScreenshot', { format, ...(format === 'jpeg' ? { quality: opts.quality ?? 88 } : {}), ...(clip ? { clip: { ...clip, scale: 1 } } : {}) });
+  const file = join(outDir, `${name}.${format === 'jpeg' ? 'jpg' : format}`);
   writeFileSync(file, Buffer.from(r.data, 'base64'));
   return file;
 };

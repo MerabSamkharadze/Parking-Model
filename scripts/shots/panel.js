@@ -40,6 +40,6 @@ await sim(`s.setRunning(false)`);
 out.layout = { before: o1, after: o2, same: o1 === o2 };
 out.afterRun = await state();
 // preset switch restarts
-out.presetC = await click(`[...document.querySelectorAll('aside [role=option]')].find(o => o.textContent.includes('High throughput'))`); await wait(800); out.afterPreset = await state();
+out.presetC = await click(`[...document.querySelectorAll('aside [aria-label="Versions"] button')].find(o => o.textContent.includes('High throughput'))`); await wait(800); out.afterPreset = await state();
 await shot('panel-after');
 return out;
