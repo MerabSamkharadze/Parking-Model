@@ -4,14 +4,26 @@ Interactive 3D simulator of an automated underground vehicle-parking facility (A
 dropped in a bay, a lift takes them down, a shuttle slides them into a slot — and back again
 when the driver calls. Everything runs in the browser: a deterministic simulation engine, a
 three.js scene that only visualises engine state, and a control panel to change the facility,
-the strategy and the demand while it runs.
+the strategy and the demand while it runs. It is also a pitch: 144 cars under a 42 × 14 m
+footprint, under a shopping centre, an office tower or a residential courtyard, with a guided
+tour that shows a first-time viewer how it works.
 
-![The simulator at 07:53 on a weekday: preset B, cars moving, live panel](docs/screenshots/app.jpg)
+![The simulator at 07:53 on a weekday: preset B under a shopping centre, cars moving, live panel](docs/screenshots/app.jpg)
 
-The project is specified in [`SPEC.md`](./SPEC.md) and built milestone by milestone (M0 → M6).
-Working rules for contributors and agents are in [`CLAUDE.md`](./CLAUDE.md). Progress and
-measured numbers: [`STATUS.md`](./STATUS.md). How the spec's open points were resolved:
+The project is specified in [`SPEC.md`](./SPEC.md) and built milestone by milestone (M0 → M6,
+plus M7 — the presentation layer the user asked for, `DECISIONS.md` U1). Working rules for
+contributors and agents are in [`CLAUDE.md`](./CLAUDE.md). Progress and measured numbers:
+[`STATUS.md`](./STATUS.md). How the spec's open points were resolved:
 [`DECISIONS.md`](./DECISIONS.md).
+
+## The tour
+
+Press **▶ Tour** (or open `/?tour=1`): nine captioned steps — the parking problem on the
+street, the idea, a drop-off followed by the camera down the shaft and into the slot, the car
+called back, the same machine under three kinds of building, and the live numbers. `→` / `Enter`
+next, `←` back, `Esc` leaves; the tour restores whatever you were doing.
+
+![The street: kerb-parked cars, the entry bays with a car being scanned, the lift head, the mall](docs/screenshots/street.jpg)
 
 ## Run it
 
@@ -31,6 +43,7 @@ DPR=2 node scripts/screenshot.mjs http://localhost:3000/ scripts/shots/day60x.js
 DPR=2 node scripts/screenshot.mjs http://localhost:3000/ scripts/shots/panel.js out/     # panel blocks + DOM interactions
 DPR=2 node scripts/screenshot.mjs http://localhost:3000/ scripts/shots/versions.js out/  # compare timing, save, share
 DPR=2 node scripts/screenshot.mjs http://localhost:3000/ scripts/shots/failures.js out/  # failures, shortcuts
+DPR=2 node scripts/screenshot.mjs "http://localhost:3000/?tour=1" scripts/shots/tour.js out/  # the guided tour, step by step
 ```
 
 ## What you can do
@@ -44,6 +57,7 @@ DPR=2 node scripts/screenshot.mjs http://localhost:3000/ scripts/shots/failures.
 | **Demand** | weekday / saturday / stress profiles, residents, `+ Car`, `− Retrieve` |
 | **Watch** | live occupancy per level, sparklines, percentiles, a searchable index that flies the camera to any car, the SQL-style event log, the 24 h timeline |
 | **Break it** | lift down, shuttle down, power loss — the scene turns clay, jobs freeze or re-route, the spare shuttle steps in |
+| **Look** | Isometric / Cutaway / Shaft / Slot / Street views, level isolation, a follow camera on any car; site chips put the facility under a mall, a tower or a courtyard |
 
 <p>
   <img src="docs/screenshots/insert.jpg" alt="A car being rotated and pushed into slot L1-R2-03, level isolated" width="49%">
@@ -67,10 +81,16 @@ engine reproduces within ±15 % (`tests/engine.timings.test.ts`).
 
 ## Quality gates
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (61 tests) and `pnpm build` are green at every
-milestone. Lighthouse on the production build (Chrome 153, headless): accessibility **100**,
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (69 tests) and `pnpm build` are green at every
+milestone. The scene holds 60 FPS on an Apple M1 at 1890 × 1323 (dpr 1.75) with the 320-slot
+preset running at 60×: real car models are instanced (two draw calls per model), parked and
+kerb cars use a reduced-detail twin, and the lighting budget is five point lights. Lighthouse on the production build (Chrome 153, headless): accessibility **100**,
 best practices **100**. Keyboard focus is visible everywhere; `prefers-reduced-motion` turns
 camera flights into cuts and digit rolls into plain updates.
 
-Car models and fonts: IBM Plex Mono (OFL) is self-hosted for the 3D labels; see
-`public/fonts/LICENSE.txt`.
+## Credits
+
+Car models: sedan, hatchback, coupe and SUV by [Quaternius](https://quaternius.com) via
+[poly.pizza](https://poly.pizza), CC0 — `public/models/LICENSE.txt` lists the sources; the
+reduced-detail twins in `public/models/lod` are built with `scripts/models/lod.mjs`. IBM Plex
+Mono (OFL) is self-hosted for the 3D labels, `public/fonts/LICENSE.txt`.

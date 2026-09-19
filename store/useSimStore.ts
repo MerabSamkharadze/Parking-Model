@@ -69,7 +69,8 @@ interface SimState {
   setDemandProfile: (name: DemandProfile['name']) => void;
   setResidents: (residents: number) => void;
   // --- commands (SPEC §8.5) ---
-  addVehicle: (tenant?: 'visitor' | 'resident') => void;
+  /** Returns the new vehicle's id (null when the arrival was rejected). */
+  addVehicle: (tenant?: 'visitor' | 'resident') => string | null;
   callVehicle: (vehicleId?: string) => void;
   // --- failures (SPEC §8.10, §4.5) ---
   setFailure: (kind: 'lift' | 'shuttle' | 'power', id: string | null, down: boolean) => void;
@@ -297,9 +298,10 @@ export const useSimStore = create<SimState>((set, get) => {
     clearCompare: () => set({ compare: { running: false, rows: [], elapsedMs: null, error: null } }),
     addVehicle: (tenant = 'visitor') => {
       const { engine } = get();
-      if (!engine) return;
-      engine.addVehicle(tenant);
+      if (!engine) return null;
+      const job = engine.addVehicle(tenant);
       get().setSnapshot(engine.snapshot());
+      return job?.vehicleId ?? null;
     },
     callVehicle: (vehicleId) => {
       const { engine } = get();

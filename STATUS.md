@@ -12,8 +12,8 @@ Updated after each milestone. Gates: `pnpm lint`, `pnpm typecheck`, `pnpm test`,
 | M3 engine ↔ scene | ✅ done | `00c21ec` | 20 Hz snapshot bridge, render clock, VehiclePool, lift/shuttle/car animation at every stage, run control |
 | M4 control panel | ✅ done | `096212c` | §8 blocks 1–9, virtualised index + flyTo, event log, sparklines, timeline strip, custom versions |
 | M5 versions | ✅ done | `d585183` | saved versions (localStorage, max 12), share `?v=` links, compare mode in Web Workers |
-| M6 failure & polish | ✅ done | — | failure panel, degraded UI, keyboard shortcuts, reduced motion, README screenshots, Lighthouse a11y 100 |
-| M7 presentation (user request, DECISIONS U1) | ⬜ next | | real CC0 car models, detailed structure and surface context, guided story mode with captions and follow-camera |
+| M6 failure & polish | ✅ done | `9fdab40` | failure panel, degraded UI, keyboard shortcuts, reduced motion, README screenshots, Lighthouse a11y 100 |
+| M7 presentation (user request, DECISIONS U1) | ✅ done | — | real CC0 car models (instanced, LOD twins), steel rack, street + mall / tower / courtyard, readable bays with a scan sweep, guided tour with follow camera, 60 FPS kept |
 
 ## M1 — engine vs SPEC §2 (preset B, weekday demand, seed 42, 24 h)
 
@@ -226,6 +226,45 @@ CONFIG_LIMITS`, `lib/format.ts`, and the live `TimelineStrip` (throughput + queu
 | shortcuts | space → running; `3` → shaft view; `/` → search focused; esc → selection cleared |
 | gates | lint, typecheck, 61 tests, build green |
 
+## M7 — presentation (DECISIONS U1, S32–S37)
+
+- Real cars: `components/scene/carModels.ts` bakes the four CC0 models into paint / rest
+  geometries; `VehiclePool` (moving, full detail), `ParkedCars` (parked field, LOD twin,
+  solid + ghost per isolation) and `Context › KerbCars` (street, LOD twin) instance them.
+- Surroundings: `Ground` (frame + lid fading with camera height, street, kerbs, lane marks),
+  `Context` (lamps with glow pools, kerb cars, city wall, site settings mall / tower /
+  courtyard), `Structure` (posts, rails, light strips, ≤ 3 level lights), `Bays` (pads,
+  scanner portals, scan sweep), `EnvironmentLight` (RoomEnvironment PMREM), fog.
+- Views: `street` and `follow` presets joined isometric / cutaway / shaft / slot; site and
+  view chips in the viewport overlay; `useUiStore.follow(id)` tracks any car.
+- Tour: `lib/story.ts` (steps, exit rules — tested in `tests/story.test.ts`) and
+  `components/story/Story.tsx` (drives the stores, captions, keyboard, `?tour=1`).
+- Dev handle grew `info()` (draw calls / triangles), `scene` and `camera` for profiling.
+
+### M7 DoD, measured (headless Chrome 153, Apple M1 7-core GPU, 1440 × 900 window, dpr 1.75 → 1890 × 1323)
+
+| check | result |
+|---|---|
+| preset B, mall, sim at 60× | isometric **60 FPS**, street 60, cutaway 60; GPU 10.5 ms/frame (73 parked cars) |
+| preset C (320 slots), mall, sim at 60× | isometric **59–60 FPS**, street 60, cutaway 60; GPU 12.6 ms/frame (156 parked cars, 450 k triangles, 257 draw calls) |
+| what the budget went to (C, before → after) | point lights 10 → 5: −2.8 ms; parked cars on LOD twins: −1.3 ms; Lambert surface: −2 ms; 14.4 → 11 ms with no context |
+| tour end to end (`scripts/shots/tour.js`, `?tour=1`) | 9 steps in 82 s wall, every caption rendered, follow camera on the spawned car, 60 FPS at the end, state restored on Explore |
+| scan sweep | `Bays` shows the plane only while a job is in stage `scan`; verified mid-scan at k = 0.31 (`scan.js`) |
+| models | 4 × ~55 KB meshopt GLB + 4 × ~26 KB LOD twins = 330 KB, loaded once, baked once |
+| gates | lint, typecheck, 69 tests (+ `story.test.ts`), build green |
+
+### Things learned in M7
+
+- Quaternius cars are flat-shaded with split normals, so a plain `simplify` barely reduces
+  them (seams are locked); drop the normals, weld, simplify, then recompute flat normals.
+- `gltf-transform optimize` merges materials by default (`--palette false --join false`
+  keeps the body paint separable for per-instance tinting).
+- On the M1 the fragment cost of point lights dominates at retina resolution: ~0.9 ms per
+  light per full-screen layer at 1890 × 1323; the frame + lid are two such layers.
+- Profiling from the headless driver: `window.__avp.info()` after `render()`, and toggling
+  `visible` on scene objects between `time()` calls — with ~10 warm-up frames after every
+  toggle, or shader recompiles are counted as frame time.
+
 ## What the engine exposes (for M2–M6)
 
 - `new Engine({ config, demand, seed, devChecks })`, `step()`, `run(seconds)`, `snapshot()`,
@@ -242,7 +281,8 @@ CONFIG_LIMITS`, `lib/format.ts`, and the live `TimelineStrip` (throughput + queu
 
 ## Left to do
 
-M7 — the presentation milestone the user asked for (DECISIONS U1): real car models,
-detail, surface context, story mode. Everything in SPEC §10 (M0–M6) is done. Open items that need the user's eye, not code:
-the header name "AVP Simulator", header/timeline heights (48/96 px), and any decision in
-`DECISIONS.md` they want changed.
+Everything in SPEC §10 (M0–M6) and the user's M7 (DECISIONS U1) is done. Open items that
+need the user's eye, not code: the header name "AVP Simulator", header/timeline heights
+(48/96 px), the tour's captions (English, `lib/story.ts`), and any decision in
+`DECISIONS.md` they want changed. Ideas not built: cars driving on the street, a taxi in
+the kerb row (the CC0 bundle has one), sound.

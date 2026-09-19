@@ -1,0 +1,12 @@
+Car models by Quaternius (https://quaternius.com), published as Public Domain / CC0 1.0
+via poly.pizza ("Cars Bundle", https://poly.pizza/bundle/Cars-Bundle-FE5IWe6OMk):
+
+  sedan.glb      "Car"        https://poly.pizza/m/Cz6yDaUcM9
+  hatchback.glb  "Car"        https://poly.pizza/m/unqqkULtRU
+  coupe.glb      "Sports Car" https://poly.pizza/m/1mkmFkAz5v
+  suv.glb        "SUV"        https://poly.pizza/m/xsMtZhBkxL
+
+Re-encoded with gltf-transform (KHR_mesh_quantization + EXT_meshopt_compression),
+no other changes. lod/*.glb are reduced-detail twins of the same models (about half
+the triangles, scripts/models/lod.mjs). CC0: no attribution required; given anyway
+with thanks.

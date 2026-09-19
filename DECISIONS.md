@@ -140,7 +140,8 @@ will be adjusted.
   large buildings and residential courtyards and solves the city's parking problem. This
   overrides SPEC §12 ("no GLTF, everything from primitives") for cars and raises the
   visual bar of §7/§9 without dropping the dark industrial identity. Delivered as M7
-  (see STATUS.md); CC0 assets only, with a size budget so the M6 Lighthouse scores hold.
+  (see STATUS.md, decisions S32–S37); CC0 assets only (~330 KB of models in total), the
+  engine untouched, every scene addition still driven by engine state (SPEC §0.3).
 
 ## Scene / UI (applied from M2 on)
 
@@ -266,5 +267,48 @@ will be adjusted.
   shows a clay `degraded` badge. Touch targets are ≥ 24 px (steppers 24, switches 24 × 40)
   — Lighthouse accessibility 100 / best practices 100 on the production build.
   Lighthouse is run with `npx lighthouse@12` (a tool, not a dependency — S10).
+- **S32 — real cars (U1; supersedes S4 for the car itself).** Four CC0 Quaternius models
+  (`public/models`, ~55 KB each after meshopt) are baked once at load into two geometries
+  per model — *paint* (tinted per instance) and *rest* (vertex colours; headlights forced
+  warm white, tail lights red) — oriented +X forward with the wheels on y = 0, so
+  `motion.ts` placement needs no per-model offsets. Everything is instanced: the moving
+  pool costs two draw calls per model, the parked field four (solid + ghost for the
+  non-isolated levels), the kerb two. Model and paint per ticket come from an FNV hash of
+  the vehicle id (stable across frames, reloads and machines); oversize cars are the SUV
+  at × 1.12. Parked and kerb cars use a reduced-detail twin (`public/models/lod`,
+  `scripts/models/lod.mjs`: normals dropped so the flat-shaded seams weld, meshopt
+  simplification at 1 % error → ~52 % of the triangles, flat normals recomputed when
+  baked) — invisible at slot-camera distance, 724 k → 375 k triangles for preset C.
+  The slot pad keeps the S2 colours under the car.
+- **S33 — lighting budget.** Every point light is evaluated by every lit pixel, and the
+  ground and lid cover the whole frame, so: at most three level lights (`litLevelsOf`,
+  spread top to bottom; a light reaches its neighbours anyway) plus two over the bays;
+  the surface planes use the Lambert model (matte asphalt gains nothing from PBR); street
+  lamps light nothing — their pools are additive glow discs on the ground; a hemisphere
+  light gives the night sky fill. Preset C at 1890 × 1323 went from 14.4 to ~11 ms GPU.
+- **S34 — surface and context.** The ground is a four-plane frame around the pit plus a lid
+  over it; `surfaceOpacity(cameraY)` fades all of it from 12 % above 8 m (the dollhouse
+  view) to opaque below 3.5 m (the street view). Around it: a two-lane street with kerb
+  cars (one gap every fifth space) and lamps, a far-side city wall, fog from 140 m. Site
+  chips: none / mall (block with a sign band and canopy) / tower (podium + 28 × 64 m
+  tower) / courtyard (three residential blocks, lawn, trees on the far side of the pit
+  only so the levels stay readable). Section views (cutaway, shaft) drop the near street,
+  which would otherwise float in front of the pit.
+- **S35 — bays you can read.** Concrete pads inside the markings, a scanner portal with a
+  light bar over every input bay, and the scan itself: an amber plane sweeps the car
+  there and back while its job is in stage `scan` — timing is `progressAt` over the
+  engine's stage window, the scene never decides when.
+- **S36 — guided tour.** Nine steps (`lib/story.ts`): problem (street, 1×) → idea
+  (isometric, 4×) → drop-off / down the shaft / into the slot (follow camera; the shaft
+  step runs at 1× so the descent is watchable) → parked (slot view) → call it back
+  (follow) → where it fits (settings cycle every 4 s) → the numbers (cutaway, manual).
+  Stage-driven steps end on the job's stage, never before `minSeconds` (reading time) and
+  never after their timeout; a rejected car moves the tour on after 3 s. Starting saves
+  running / speed / setting / view and stopping restores them; `?tour=1` autostarts; `→`
+  `Enter` `←` `Esc` navigate; the tour spawns a visitor and follows it, and calls that
+  same car back (else the next planned departure).
+- **S37 — steel.** Instanced posts at every column boundary on both rows, shuttle guide
+  rails per corridor, a light strip under each slab (one draw call each for the whole
+  rack); the follow camera sits at (7, 4.5, 8.5) from the car, damped at 2.5 s⁻¹.
 - **M0** header name "AVP Simulator"; header 48 px, timeline 96 px; English UI; stacked
   layout under 1024 px; TypeScript 5.9 and Next 15.5 pinned.

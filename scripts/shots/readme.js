@@ -15,8 +15,13 @@ const viewport = () => evaluate(`(() => { const r = document.querySelector('sect
 await sim(`s.engine.run(7 * 3600 + 50 * 60); s.setSnapshot(s.engine.snapshot()); s.clock.t = s.engine.t`);
 await sim(`const e = s.engine; const h = s.history; h.clear(); const e2 = new (e.constructor)({ config: s.config, demand: s.demand, seed: s.seed, devChecks: false }); for (let m = 0; m <= 470; m++) { if (m > 0) e2.run(60); h.sample(e2.snapshot()); } s.setSnapshot(e.snapshot())`);
 await stepUntil('store', 'corridor');
-await ui(`s.setCameraPreset('isometric')`); await wait(1800);
+await ui(`s.setSetting('mall'); s.setCameraPreset('isometric')`); await wait(1800);
 await shot('app');
+// 1b. the street, entry bays and a car being scanned (the tour's opening view)
+await stepUntil('store', 'scan');
+await sim(`s.engine.run(3); s.setSnapshot(s.engine.snapshot()); s.clock.t = s.engine.t`);
+await ui(`s.setCameraPreset('street')`); await wait(1800);
+await shot('street', await viewport());
 // 2. a car being inserted, level isolated
 const slot = await stepUntil('store', 'insert');
 await sim(`s.engine.run(4); s.setSnapshot(s.engine.snapshot()); s.clock.t = s.engine.t`);

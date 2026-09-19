@@ -2,8 +2,8 @@
 
 // SPEC §9: every slot is one instance of a single InstancedMesh (one draw
 // call), coloured per instance: free / reserved / occupied / called / ev
-// (DECISIONS S2). Occupied slots rise to a car-sized block so occupancy reads
-// from any distance; parked cars are never separate meshes (DECISIONS S4).
+// (DECISIONS S2). Slots are floor pads; the parked cars standing on them are
+// real models (ParkedCars.tsx, DECISIONS U1 — replaces S4's blocks).
 //
 // Level isolation uses a second, ghosted InstancedMesh (opacity 0.15, no
 // depth write) for the non-selected levels — so the common case stays one
@@ -24,7 +24,8 @@ import type { Palette } from './palette';
 
 const SLOT_W = 2.3; // X, inside the 2.6 m pitch
 const SLOT_D = 4.9; // Z, inside the 5.2 m depth
-const HEIGHT = { free: 0.06, reserved: 0.5, occupied: 1.4 } as const;
+// pads only: the cars themselves are real models (ParkedCars, DECISIONS U1)
+const HEIGHT = { free: 0.06, reserved: 0.14, occupied: 0.1 } as const;
 
 // module-level scratch objects: nothing is allocated per update (SPEC §9)
 const _obj = new Object3D();

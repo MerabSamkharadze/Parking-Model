@@ -10,21 +10,27 @@
 // snapshot inside useFrame (see SimDriver / motion.ts).
 
 import { Canvas } from '@react-three/fiber';
-import { useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { bounds, layout } from '@/lib/geometry';
 import type { FacilityConfig } from '@/lib/sim/types';
 import { useSimStore } from '@/store/useSimStore';
 import { useUiStore } from '@/store/useUiStore';
 import { AdaptiveQuality } from './AdaptiveQuality';
 import { CameraRig, DEFAULT_FOV, cameraGoal } from './CameraRig';
+import { Context } from './Context';
 import { DevHandle } from './DevHandle';
+import { EnvironmentLight } from './EnvironmentLight';
+import { Ground } from './Ground';
 import { LevelSlab } from './LevelSlab';
+import { ParkedCars } from './ParkedCars';
 import { Lighting } from './Lighting';
 import { Shaft } from './Shaft';
 import { Shuttle } from './Shuttle';
 import { SimDriver } from './SimDriver';
 import { SlotField } from './SlotField';
 import { SlotMarker } from './SlotMarker';
+import { Structure } from './Structure';
+import { Bays } from './Bays';
 import { SurfaceDeck } from './SurfaceDeck';
 import { VehiclePool } from './VehiclePool';
 import { slidingSlots } from './motion';
@@ -83,13 +89,18 @@ function Scene({ cfg, shadows, onShadows }: { cfg: FacilityConfig; shadows: bool
   const cameraPreset = useUiStore((s) => s.cameraPreset);
   const cameraNonce = useUiStore((s) => s.cameraNonce);
   const flyTo = useUiStore((s) => s.flyTo);
+  const setting = useUiStore((s) => s.setting);
 
   return (
     <>
       <color attach="background" args={[palette.void]} />
+      <fog attach="fog" args={[palette.void, 140, 420]} />
       <SimDriver />
       <Lighting palette={palette} shadows={shadows} extent={extent} />
+      <Ground cfg={cfg} palette={palette} />
       <SurfaceDeck cfg={cfg} palette={palette} />
+      <Bays cfg={cfg} palette={palette} />
+      <Structure cfg={cfg} palette={palette} />
       {Array.from({ length: cfg.levels }, (_, level) => (
         <LevelSlab key={level} cfg={cfg} level={level} palette={palette} dimmed={selectedLevel !== null && selectedLevel !== level} />
       ))}
@@ -101,7 +112,12 @@ function Scene({ cfg, shadows, onShadows }: { cfg: FacilityConfig; shadows: bool
       {shuttles.map((s) => (
         <Shuttle key={s.id} cfg={cfg} shuttleId={s.id} level={s.level} palette={palette} dimmed={selectedLevel !== null && selectedLevel !== s.level} />
       ))}
-      <VehiclePool cfg={cfg} palette={palette} />
+      <Suspense fallback={null}>
+        <VehiclePool cfg={cfg} palette={palette} />
+        {slots && <ParkedCars cfg={cfg} slots={slots} sliding={sliding} selectedLevel={selectedLevel} />}
+        <Context cfg={cfg} palette={palette} setting={setting} />
+      </Suspense>
+      <EnvironmentLight />
       <CameraRig cfg={cfg} preset={cameraPreset} nonce={cameraNonce} selectedSlotKey={selectedSlotKey} selectedLevel={selectedLevel} />
       <AdaptiveQuality onShadows={onShadows} />
       {process.env.NODE_ENV !== 'production' && <DevHandle />}

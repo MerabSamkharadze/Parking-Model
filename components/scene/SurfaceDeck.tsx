@@ -1,8 +1,8 @@
 'use client';
 
-// SPEC §9: surface plate, input/output bay markings, transparent "street"
-// plane. INPUT / OUTPUT are real floor markings — the one place upper-case
-// labels are allowed (SPEC §7).
+// SPEC §9: input/output bay markings, shaft outlines, the transfer lane and
+// the INPUT / OUTPUT floor markings — the one place upper-case labels are
+// allowed (SPEC §7). The surface itself is Ground.tsx's lid.
 
 import { Text } from '@react-three/drei';
 import { useMemo } from 'react';
@@ -28,8 +28,6 @@ export function floorLabels(cfg: FacilityConfig): Array<{ text: string; x: numbe
 export function SurfaceDeck({ cfg, palette }: { cfg: FacilityConfig; palette: Palette }) {
   const b = useMemo(() => bounds(cfg), [cfg]);
   const lay = useMemo(() => layout(cfg), [cfg]);
-  const width = b.maxX - b.minX + 8;
-  const depth = b.maxZ - b.minZ + 8;
   const bays = useMemo(() => {
     const out: Array<{ kind: 'bay_in' | 'bay_out'; x: number; z: number }> = [];
     for (let i = 0; i < cfg.baysIn; i++) out.push({ kind: 'bay_in', ...bayPosition(cfg, 'bay_in', i) });
@@ -40,11 +38,6 @@ export function SurfaceDeck({ cfg, palette }: { cfg: FacilityConfig; palette: Pa
 
   return (
     <group>
-      {/* street plane: see-through so the levels below stay readable */}
-      <mesh position={[(b.minX + b.maxX) / 2, 0, 0]} rotation-x={-Math.PI / 2} receiveShadow>
-        <planeGeometry args={[width, depth]} />
-        <meshStandardMaterial color={palette.slab} transparent opacity={0.22} depthWrite={false} />
-      </mesh>
       {/* transfer lane: the deck path cars take between the shafts and the bays (DECISIONS E1: pooled lifts) */}
       <mesh position={[(b.minX + b.maxX) / 2, 0.01, 0]} rotation-x={-Math.PI / 2}>
         <planeGeometry args={[b.maxX - b.minX, 3.2]} />

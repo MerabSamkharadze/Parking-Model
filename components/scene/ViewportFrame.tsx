@@ -6,7 +6,8 @@
 import dynamic from 'next/dynamic';
 import { useEffect } from 'react';
 import { useSimStore } from '@/store/useSimStore';
-import { useUiStore, type CameraPreset } from '@/store/useUiStore';
+import { StoryOverlay } from '@/components/story/Story';
+import { SETTINGS, useUiStore, type CameraPreset } from '@/store/useUiStore';
 
 const Viewport = dynamic(() => import('./Viewport').then((m) => m.Viewport), {
   ssr: false,
@@ -18,6 +19,7 @@ const VIEWS: Array<{ id: CameraPreset; label: string }> = [
   { id: 'cutaway', label: 'Cutaway' },
   { id: 'shaft', label: 'Shaft' },
   { id: 'slot', label: 'Slot' },
+  { id: 'street', label: 'Street' },
 ];
 
 function chip(active: boolean): string {
@@ -43,6 +45,8 @@ function Overlay() {
   const toggleLevel = useUiStore((s) => s.toggleLevel);
   const preset = useUiStore((s) => s.cameraPreset);
   const setPreset = useUiStore((s) => s.setCameraPreset);
+  const setting = useUiStore((s) => s.setting);
+  const setSetting = useUiStore((s) => s.setSetting);
   return (
     <div className="pointer-events-none absolute inset-x-4 bottom-3 flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
       <div className="flex flex-col gap-2">
@@ -61,12 +65,22 @@ function Overlay() {
           ))}
         </div>
       </div>
-      <div className="pointer-events-auto flex flex-wrap gap-1" role="group" aria-label="Camera view">
-        {VIEWS.map((v) => (
-          <button key={v.id} type="button" aria-pressed={preset === v.id} className={chip(preset === v.id)} onClick={() => setPreset(v.id)}>
-            {v.label}
-          </button>
-        ))}
+      <div className="flex flex-col items-end gap-2">
+        <div className="pointer-events-auto flex flex-wrap justify-end gap-1" role="group" aria-label="Surroundings">
+          <span className="self-center font-mono text-[11px] text-ink-soft">site</span>
+          {SETTINGS.map((v) => (
+            <button key={v} type="button" aria-pressed={setting === v} className={chip(setting === v)} onClick={() => setSetting(v)}>
+              {v}
+            </button>
+          ))}
+        </div>
+        <div className="pointer-events-auto flex flex-wrap justify-end gap-1" role="group" aria-label="Camera view">
+          {VIEWS.map((v) => (
+            <button key={v.id} type="button" aria-pressed={preset === v.id} className={chip(preset === v.id)} onClick={() => setPreset(v.id)}>
+              {v.label}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -94,6 +108,7 @@ export function ViewportFrame() {
     <section aria-label="3D viewport" className="shell-viewport relative overflow-hidden bg-void">
       <Viewport />
       <Overlay />
+      <StoryOverlay />
     </section>
   );
 }

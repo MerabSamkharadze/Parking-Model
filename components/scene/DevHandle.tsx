@@ -8,6 +8,7 @@
 
 import { useThree } from '@react-three/fiber';
 import { useEffect } from 'react';
+import type { Camera, Scene } from 'three';
 import { PRESETS } from '@/lib/presets';
 import type { SimSnapshot } from '@/lib/sim/types';
 import { useSimStore } from '@/store/useSimStore';
@@ -17,7 +18,12 @@ export interface DevHandle {
   render: () => void;
   frame: (width?: number) => string;
   time: (frames?: number) => { frames: number; ms: number; fps: number };
+  /** Renderer statistics of the last frame. */
+  info: () => { calls: number; triangles: number; geometries: number; textures: number; programs: number };
   snapshot: () => SimSnapshot | null;
+  /** The three.js scene graph and camera (for ad-hoc profiling from the headless driver). */
+  scene: Scene;
+  camera: Camera;
   sim: typeof useSimStore;
   ui: typeof useUiStore;
   presets: typeof PRESETS;
@@ -32,6 +38,8 @@ declare global {
 export function DevHandle() {
   const advance = useThree((s) => s.advance);
   const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  const camera = useThree((s) => s.camera);
   useEffect(() => {
     const ctx = gl.getContext();
     const render = () => advance(performance.now());
@@ -55,10 +63,16 @@ export function DevHandle() {
       const ms = performance.now() - t0;
       return { frames, ms: Math.round(ms), fps: Math.round((frames / ms) * 1000) };
     };
-    window.__avp = { render, frame, time, snapshot: () => useSimStore.getState().snapshot, sim: useSimStore, ui: useUiStore, presets: PRESETS };
+    const info = () => {
+      render();
+      const r = gl.info.render;
+      const m = gl.info.memory;
+      return { calls: r.calls, triangles: r.triangles, geometries: m.geometries, textures: m.textures, programs: gl.info.programs?.length ?? 0 };
+    };
+    window.__avp = { render, frame, time, info, snapshot: () => useSimStore.getState().snapshot, scene, camera, sim: useSimStore, ui: useUiStore, presets: PRESETS };
     return () => {
       delete window.__avp;
     };
-  }, [advance, gl]);
+  }, [advance, gl, scene, camera]);
   return null;
 }

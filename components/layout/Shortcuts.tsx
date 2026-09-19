@@ -34,6 +34,7 @@ export function Shortcuts() {
         search?.select();
       } else if (e.key === 'Escape') {
         const ui = useUiStore.getState();
+        if (ui.storyStep >= 0) return; // the tour handles Escape itself
         ui.selectSlot(null);
         ui.selectVehicle(null);
         ui.clearLevel();

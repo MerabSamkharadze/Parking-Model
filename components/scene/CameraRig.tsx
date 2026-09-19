@@ -12,6 +12,7 @@ import { bayPosition, bounds, layout, levelY, parseSlotKey, slotPosition } from 
 import type { FacilityConfig } from '@/lib/sim/types';
 import type { CameraPreset } from '@/store/useUiStore';
 import { floorLabels } from './SurfaceDeck';
+import { followed } from './VehiclePool';
 
 type Controls = ComponentRef<typeof OrbitControls>;
 
@@ -115,11 +116,19 @@ export function cameraGoal(
       }
       return frame(DIR.isometric, centre, facilityHull(cfg));
     }
+    case 'street': {
+      // eye level on the far pavement, looking across the street at the entry bays
+      const target = new Vector3(l.minX - 3, 1.2, 0);
+      return { pos: new Vector3(l.minX - 16, 2.6, b.maxZ + 22), target };
+    }
+    case 'follow': // the rig tracks the car every frame; start from the isometric fit
     case 'isometric':
     default:
       return frame(DIR.isometric, centre, facilityHull(cfg));
   }
 }
+
+const FOLLOW_OFFSET = new Vector3(7, 4.5, 8.5);
 
 /** `prefers-reduced-motion: reduce` → camera cuts instead of flying (SPEC §10 M6). */
 export function useReducedMotion(): boolean {
@@ -166,11 +175,17 @@ export function CameraRig({
   useFrame((_, dt) => {
     const c = controls.current;
     const g = goal.current;
-    if (!c || !g.active) return;
-    const k = reduced ? 1 : 1 - Math.exp(-Math.min(dt, 0.1) * 4);
+    if (!c) return;
+    if (preset === 'follow' && followed.active) {
+      g.target.set(followed.x, followed.y + 0.8, followed.z);
+      g.pos.copy(g.target).add(FOLLOW_OFFSET);
+      g.active = true;
+    }
+    if (!g.active) return;
+    const k = reduced ? 1 : 1 - Math.exp(-Math.min(dt, 0.1) * (preset === 'follow' ? 2.5 : 4));
     c.object.position.lerp(g.pos, k);
     c.target.lerp(g.target, k);
-    if (c.object.position.distanceToSquared(g.pos) < 0.01 && c.target.distanceToSquared(g.target) < 0.01) g.active = false;
+    if (preset !== 'follow' && c.object.position.distanceToSquared(g.pos) < 0.01 && c.target.distanceToSquared(g.target) < 0.01) g.active = false;
     c.update();
   });
 

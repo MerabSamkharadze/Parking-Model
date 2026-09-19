@@ -16,6 +16,8 @@ export function Lighting({ palette, shadows, extent }: { palette: Palette; shado
   return (
     <>
       <ambientLight intensity={0.5} />
+      {/* night sky fill: cool from above, nothing from below, so roofs and the street read */}
+      <hemisphereLight args={['#33414d', '#0a0c0e', 0.6]} />
       <directionalLight
         ref={key}
         position={[extent * 0.6, extent * 0.9, extent * 0.5]}
