@@ -7,9 +7,9 @@ Updated after each milestone. Gates: `pnpm lint`, `pnpm typecheck`, `pnpm test`,
 | milestone | state | commit | notes |
 |---|---|---|---|
 | M0 scaffold | ✅ done | `fac7360` | Next 15.5, TS 5.9 strict, Tailwind v4 tokens, Noto Sans Georgian + IBM Plex Mono, layout shell |
-| M1 sim engine | ✅ done | — | pure TS engine, 46 tests, `pnpm bench`; §2 figures reproduced (below) |
-| M2 static 3D | ⬜ next | | geometry from config, InstancedMesh slots, camera presets, level isolation |
-| M3 engine ↔ scene | ⬜ | | snapshot bridge at 20 Hz, vehicle pool, lift/shuttle animation, play/pause/speed |
+| M1 sim engine | ✅ done | `7f6452a` | pure TS engine, 46 tests, `pnpm bench`; §2 figures reproduced (below) |
+| M2 static 3D | ✅ done | — | geometry from config, InstancedMesh slots, 4 camera presets, level isolation, flyTo |
+| M3 engine ↔ scene | ⬜ next | | snapshot bridge at 20 Hz, vehicle pool, lift/shuttle animation, play/pause/speed |
 | M4 control panel | ⬜ | | §8 blocks 1–9, index table + flyTo, event log, sparklines, timeline strip |
 | M5 versions | ⬜ | | presets A–D in the UI, custom configs, localStorage, share URL, compare mode (worker) |
 | M6 failure & polish | ⬜ | | failure panel, degraded UI, keyboard shortcuts, reduced motion, README, Lighthouse ≥ 95 |
@@ -63,6 +63,53 @@ pre-fetch starts just in time instead of hogging output bays.
 `moves/h` = completed store + retrieve over the day; `peak/h` = best 15-min window;
 `lift cap/h` = lifts × 3600 / mean lift cycle; utilisation = busy share over the day.
 
+## M2 — static 3D (what is on screen)
+
+Everything is drawn from `snapshot()` + `lib/geometry.ts`; the scene holds no state of
+its own. Preset B at 00:00: residents parked (L3–L6 full, hot levels L1–L2 free except
+the EV/oversize residents), lifts parked at the surface, shuttles at their zone centre.
+
+- `SurfaceDeck` — see-through street plane, bay markings (rows of 5 beyond the end
+  shafts), amber shaft outlines, `INPUT` / `OUTPUT` floor labels (drei `Text`).
+- `LevelSlab` × levels — one box per zone, edge lines, `L{n}` label; ghosted at 0.15
+  when another level is isolated.
+- `SlotField` — two `InstancedMesh`es (solid / ghost) for all slots: free pad 0.06 m,
+  reserved 0.5 m, occupied 1.4 m block; colours per DECISIONS S2; incremental updates.
+- `Shaft` per lift (posts + head frame) with the amber `LiftPlatform` at `liftY(pos)`;
+  `Shuttle` per level/zone at the engine's x; `SlotMarker` ring on the selected slot.
+- `CameraRig` — OrbitControls (damped) + fitted presets: Isometric, Cutaway, Shaft,
+  Slot; `flyTo(slotKey)` isolates the level and flies to the slot.
+- Overlay — bay dots `in ○○○ · out ○○○`, level chips L1…Ln (isolation), preset chips;
+  wraps at phone width.
+
+### M2 DoD, measured (headless Chrome 153, Apple M1 / Metal, dpr 1.75 → 1890 × 1323)
+
+| check | result |
+|---|---|
+| 320 slots (preset C) at 60 FPS | 60 FPS (rAF-bound); 4.8 ms per frame GPU-synced, i.e. ≈ 3× headroom |
+| single slot colour change without re-mount | ✓ — replacing one slot object recolours one instance; canvas element unchanged |
+| presets A–D render from config alone | ✓ — A (1 shaft, 1+1 bays), B, C (2 zones, 4 shafts, 8 levels), D (10+10 bays) |
+| level isolation | ✓ — selected level solid, others at 0.15, shuttles and labels follow |
+| console clean | only R3F's upstream `THREE.Clock` deprecation notice; no errors, no 404s |
+| gates | lint, typecheck, 46 tests, build green (route `/` 15.9 kB, 118 kB first load) |
+
+Repeat with `pnpm dev` running:
+`DPR=2 node scripts/screenshot.mjs http://localhost:3000/ scripts/shots/presets.js out/`.
+
+### Things learned in M2 (so nobody re-learns them)
+
+- `next build` while `next dev` is running wipes `.next` under the dev server — every
+  chunk 404s until dev is restarted. Stop dev before building.
+- With React StrictMode on, R3F 9.7 loses the WebGL context 500 ms after mount in dev
+  (DECISIONS S11); production is fine.
+- A hidden tab (occluded window, automation) gets neither `requestAnimationFrame` nor
+  `ResizeObserver` callbacks, so R3F never even creates its root. The headless driver
+  (DECISIONS S12) is the reliable way to look at the scene.
+- Cosmetic, deferred to M3: at handover the lift platform and the shuttle occupy the same
+  volume (the engine's shuttle `pos` is the shaft x); the animation layer will offset
+  the shuttle to the shaft edge. The slot-focus view looks through the ghosted levels
+  above — acceptable, revisit once cars are in the scene.
+
 ## What the engine exposes (for M2–M6)
 
 - `new Engine({ config, demand, seed, devChecks })`, `step()`, `run(seconds)`, `snapshot()`,
@@ -79,6 +126,6 @@ pre-fetch starts just in time instead of hogging output bays.
 
 ## Left to do
 
-Everything from M2 on (table above). Open items that need the user's eye, not code:
+Everything from M3 on (table above). Open items that need the user's eye, not code:
 the header name "AVP Simulator", header/timeline heights (48/96 px), and any decision in
 `DECISIONS.md` they want changed.

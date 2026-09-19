@@ -8,6 +8,7 @@
 
 import { useThree } from '@react-three/fiber';
 import { useEffect } from 'react';
+import { PRESETS } from '@/lib/presets';
 import type { SimSnapshot } from '@/lib/sim/types';
 import { useSimStore } from '@/store/useSimStore';
 import { useUiStore } from '@/store/useUiStore';
@@ -19,6 +20,7 @@ export interface DevHandle {
   snapshot: () => SimSnapshot | null;
   sim: typeof useSimStore;
   ui: typeof useUiStore;
+  presets: typeof PRESETS;
 }
 
 declare global {
@@ -53,7 +55,7 @@ export function DevHandle() {
       const ms = performance.now() - t0;
       return { frames, ms: Math.round(ms), fps: Math.round((frames / ms) * 1000) };
     };
-    window.__avp = { render, frame, time, snapshot: () => useSimStore.getState().snapshot, sim: useSimStore, ui: useUiStore };
+    window.__avp = { render, frame, time, snapshot: () => useSimStore.getState().snapshot, sim: useSimStore, ui: useUiStore, presets: PRESETS };
     return () => {
       delete window.__avp;
     };

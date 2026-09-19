@@ -8,9 +8,10 @@ import { OrbitControls } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useRef, type ComponentRef } from 'react';
 import { Vector3 } from 'three';
-import { bounds, layout, levelY, parseSlotKey, slotPosition } from '@/lib/geometry';
+import { bayPosition, bounds, layout, levelY, parseSlotKey, slotPosition } from '@/lib/geometry';
 import type { FacilityConfig } from '@/lib/sim/types';
 import type { CameraPreset } from '@/store/useUiStore';
+import { floorLabels } from './SurfaceDeck';
 
 type Controls = ComponentRef<typeof OrbitControls>;
 
@@ -18,11 +19,6 @@ interface Goal {
   pos: Vector3;
   target: Vector3;
   active: boolean;
-}
-
-interface Box3 {
-  min: Vector3;
-  max: Vector3;
 }
 
 const UP = new Vector3(0, 1, 0);
@@ -36,8 +32,8 @@ const DIR = {
 export const DEFAULT_FOV = 40;
 
 /** Smallest camera distance along `dir` (unit, from target towards camera) at
- *  which every corner of `box` is inside the frustum, with a margin. */
-export function fitDistance(box: Box3, target: Vector3, dir: Vector3, fovDeg: number, aspect: number, margin = 1.08): number {
+ *  which every point is inside the frustum, with a margin. */
+export function fitDistance(points: readonly Vector3[], target: Vector3, dir: Vector3, fovDeg: number, aspect: number, marginX = 1.05, marginY = 1.2): number {
   const forward = dir.clone().negate();
   const right = new Vector3().crossVectors(forward, UP).normalize();
   const up = new Vector3().crossVectors(right, forward);
@@ -45,12 +41,37 @@ export function fitDistance(box: Box3, target: Vector3, dir: Vector3, fovDeg: nu
   const tanH = tanV * aspect;
   let d = 0;
   const p = new Vector3();
-  for (let i = 0; i < 8; i++) {
-    p.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).sub(target);
+  for (const point of points) {
+    p.copy(point).sub(target);
     const along = p.dot(dir);
-    d = Math.max(d, along + (Math.abs(p.dot(right)) * margin) / tanH, along + (Math.abs(p.dot(up)) * margin) / tanV);
+    // marginY leaves room for the overlay chips along the bottom edge
+    d = Math.max(d, along + (Math.abs(p.dot(right)) * marginX) / tanH, along + (Math.abs(p.dot(up)) * marginY) / tanV);
   }
   return Math.max(d, 8);
+}
+
+function boxPoints(minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number): Vector3[] {
+  const out: Vector3[] = [];
+  for (let i = 0; i < 8; i++) out.push(new Vector3(i & 1 ? maxX : minX, i & 2 ? maxY : minY, i & 4 ? maxZ : minZ));
+  return out;
+}
+
+/** The visual hull of a facility: the underground structure (shafts included)
+ *  plus the surface bay markings — tighter than the raw bounding box. */
+function facilityHull(cfg: FacilityConfig): Vector3[] {
+  const l = layout(cfg);
+  const b = bounds(cfg);
+  const points = boxPoints(l.minX, b.minY, b.minZ, l.maxX, 1, b.maxZ);
+  const half = { x: 2.7, z: 1.4 }; // bay marking 5.4 × 2.8 m (SurfaceDeck)
+  for (const kind of ['bay_in', 'bay_out'] as const) {
+    const count = kind === 'bay_in' ? cfg.baysIn : cfg.baysOut;
+    for (let i = 0; i < count; i++) {
+      const p = bayPosition(cfg, kind, i);
+      points.push(new Vector3(p.x - half.x, 0, p.z - half.z), new Vector3(p.x + half.x, 0, p.z + half.z));
+    }
+  }
+  for (const l of floorLabels(cfg)) points.push(new Vector3(l.x - l.halfWidth, 0, l.z - 1), new Vector3(l.x + l.halfWidth, 0, l.z + 1));
+  return points;
 }
 
 export function cameraGoal(
@@ -61,42 +82,42 @@ export function cameraGoal(
   aspect = 16 / 9,
 ): { pos: Vector3; target: Vector3 } {
   const b = bounds(cfg);
-  const box: Box3 = { min: new Vector3(b.minX, b.minY, b.minZ), max: new Vector3(b.maxX, b.maxY + 1, b.maxZ) };
-  const centre = new Vector3(0, b.minY / 2, 0);
-  const frame = (dir: Vector3, target: Vector3, fitBox: Box3 = box) => ({
-    pos: target.clone().addScaledVector(dir, fitDistance(fitBox, target, dir, DEFAULT_FOV, aspect)),
+  const l = layout(cfg);
+  // Slightly below the box centre: lifts the picture off the overlay chips.
+  const centre = new Vector3(0, b.minY * 0.58, 0);
+  const frame = (dir: Vector3, target: Vector3, points: readonly Vector3[]) => ({
+    pos: target.clone().addScaledVector(dir, fitDistance(points, target, dir, DEFAULT_FOV, aspect)),
     target,
   });
   switch (preset) {
     case 'cutaway': {
-      if (selectedLevel === null) return frame(DIR.cutaway, centre);
+      if (selectedLevel === null) return frame(DIR.cutaway, centre, facilityHull(cfg));
       const y = levelY(cfg, selectedLevel);
-      const levelBox: Box3 = { min: new Vector3(b.minX, y - cfg.levelHeight, b.minZ), max: new Vector3(b.maxX, y + cfg.levelHeight, b.maxZ) };
-      return frame(DIR.cutaway, new Vector3(0, y, 0), levelBox);
+      return frame(DIR.cutaway, new Vector3(0, y, 0), boxPoints(l.minX, y - cfg.levelHeight, b.minZ, l.maxX, y + cfg.levelHeight, b.maxZ));
     }
     case 'shaft': {
-      const shaft = layout(cfg).shafts[0];
-      const x = shaft ? shaft.x : b.minX;
-      const shaftBox: Box3 = { min: new Vector3(x - 8, b.minY, b.minZ), max: new Vector3(x + 8, 1.5, b.maxZ) };
-      return frame(DIR.shaft, new Vector3(x, b.minY / 2, 0), shaftBox);
+      const shaft = l.shafts[0];
+      const x = shaft ? shaft.x : l.minX;
+      return frame(DIR.shaft, new Vector3(x, b.minY / 2, 0), boxPoints(x - 8, b.minY, b.minZ, x + 8, 1.5, b.maxZ));
     }
     case 'slot': {
       if (selectedSlotKey) {
+        // Three-quarter view from above the slot's outer side; flyTo isolates
+        // the level, so the slabs above are ghosted and do not block the view.
         const p = slotPosition(cfg, parseSlotKey(selectedSlotKey));
         const target = new Vector3(p.x, p.y + 0.7, p.z);
-        const side = p.z < 0 ? -1 : 1;
-        return { pos: new Vector3(p.x + 7, p.y + 5.5, p.z + side * 9), target };
+        const outward = p.z < 0 ? -1 : 1;
+        return { pos: new Vector3(p.x + 7, p.y + 10, p.z + outward * 8), target };
       }
       if (selectedLevel !== null) {
         const y = levelY(cfg, selectedLevel);
-        const levelBox: Box3 = { min: new Vector3(b.minX, y, b.minZ), max: new Vector3(b.maxX, y + 2, b.maxZ) };
-        return frame(DIR.level, new Vector3(0, y, 0), levelBox);
+        return frame(DIR.level, new Vector3(0, y, 0), boxPoints(l.minX, y, b.minZ, l.maxX, y + 2, b.maxZ));
       }
-      return frame(DIR.isometric, centre);
+      return frame(DIR.isometric, centre, facilityHull(cfg));
     }
     case 'isometric':
     default:
-      return frame(DIR.isometric, centre);
+      return frame(DIR.isometric, centre, facilityHull(cfg));
   }
 }
 

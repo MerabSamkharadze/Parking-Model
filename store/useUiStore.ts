@@ -1,6 +1,7 @@
 // UI store — SPEC §1: camera, panel, selection. Nothing here is simulation truth.
 
 import { create } from 'zustand';
+import { parseSlotKey } from '@/lib/geometry';
 
 export type CameraPreset = 'isometric' | 'cutaway' | 'shaft' | 'slot';
 
@@ -14,7 +15,7 @@ interface UiState {
   setCameraPreset: (p: CameraPreset) => void;
   toggleLevel: (level: number) => void;
   clearLevel: () => void;
-  /** Select a slot and fly the camera to it. */
+  /** Select a slot, isolate its level and fly the camera to it. */
   flyTo: (slotKey: string) => void;
   selectSlot: (slotKey: string | null) => void;
 }
@@ -27,6 +28,7 @@ export const useUiStore = create<UiState>((set) => ({
   setCameraPreset: (cameraPreset) => set((s) => ({ cameraPreset, cameraNonce: s.cameraNonce + 1 })),
   toggleLevel: (level) => set((s) => ({ selectedLevel: s.selectedLevel === level ? null : level })),
   clearLevel: () => set({ selectedLevel: null }),
-  flyTo: (slotKey) => set((s) => ({ selectedSlotKey: slotKey, cameraPreset: 'slot', cameraNonce: s.cameraNonce + 1 })),
+  flyTo: (slotKey) =>
+    set((s) => ({ selectedSlotKey: slotKey, selectedLevel: parseSlotKey(slotKey).level, cameraPreset: 'slot', cameraNonce: s.cameraNonce + 1 })),
   selectSlot: (selectedSlotKey) => set({ selectedSlotKey }),
 }));

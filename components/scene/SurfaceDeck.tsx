@@ -14,6 +14,16 @@ import type { Palette } from './palette';
 export const LABEL_FONT = '/fonts/IBMPlexMono-Medium.ttf';
 const BAY_W = 5.4; // along X
 const BAY_D = 2.8; // along Z
+const LABEL_SIZE = 1.7;
+
+/** Floor-marking anchors (also fed to the camera fit so labels stay in frame). */
+export function floorLabels(cfg: FacilityConfig): Array<{ text: string; x: number; z: number; halfWidth: number }> {
+  const z = bounds(cfg).minZ - 2.2;
+  return [
+    { text: 'INPUT', x: bayPosition(cfg, 'bay_in', 0).x, z, halfWidth: LABEL_SIZE * 0.6 * 2.5 },
+    { text: 'OUTPUT', x: bayPosition(cfg, 'bay_out', 0).x, z, halfWidth: LABEL_SIZE * 0.6 * 3 },
+  ];
+}
 
 export function SurfaceDeck({ cfg, palette }: { cfg: FacilityConfig; palette: Palette }) {
   const b = useMemo(() => bounds(cfg), [cfg]);
@@ -26,8 +36,7 @@ export function SurfaceDeck({ cfg, palette }: { cfg: FacilityConfig; palette: Pa
     for (let i = 0; i < cfg.baysOut; i++) out.push({ kind: 'bay_out', ...bayPosition(cfg, 'bay_out', i) });
     return out;
   }, [cfg]);
-  const labelIn = bayPosition(cfg, 'bay_in', 0);
-  const labelOut = bayPosition(cfg, 'bay_out', 0);
+  const labels = useMemo(() => floorLabels(cfg), [cfg]);
 
   return (
     <group>
@@ -42,28 +51,11 @@ export function SurfaceDeck({ cfg, palette }: { cfg: FacilityConfig; palette: Pa
       {lay.shafts.map((s) => (
         <RectOutline key={s.id} x={s.x} y={0.02} z={0} width={SHAFT_LENGTH} depth={2.8} color={palette.amber} opacity={0.6} />
       ))}
-      <Text
-        font={LABEL_FONT}
-        fontSize={1.1}
-        color={palette.inkSoft}
-        anchorX="center"
-        anchorY="middle"
-        position={[labelIn.x, 0.03, b.maxZ + 2.2]}
-        rotation={[-Math.PI / 2, 0, 0]}
-      >
-        INPUT
-      </Text>
-      <Text
-        font={LABEL_FONT}
-        fontSize={1.1}
-        color={palette.inkSoft}
-        anchorX="center"
-        anchorY="middle"
-        position={[labelOut.x, 0.03, b.maxZ + 2.2]}
-        rotation={[-Math.PI / 2, 0, 0]}
-      >
-        OUTPUT
-      </Text>
+      {labels.map((l) => (
+        <Text key={l.text} font={LABEL_FONT} fontSize={LABEL_SIZE} color={palette.inkSoft} anchorX="center" anchorY="middle" position={[l.x, 0.03, l.z]} rotation={[-Math.PI / 2, 0, 0]}>
+          {l.text}
+        </Text>
+      ))}
     </group>
   );
 }

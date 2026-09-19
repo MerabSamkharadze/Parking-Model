@@ -19,6 +19,7 @@ import { Lighting } from './Lighting';
 import { Shaft } from './Shaft';
 import { Shuttle } from './Shuttle';
 import { SlotField } from './SlotField';
+import { SlotMarker } from './SlotMarker';
 import { SurfaceDeck } from './SurfaceDeck';
 import { readPalette } from './palette';
 
@@ -46,6 +47,7 @@ function Scene({ cfg, snapshot, shadows, onShadows }: { cfg: FacilityConfig; sna
         <LevelSlab key={level} cfg={cfg} level={level} palette={palette} dimmed={selectedLevel !== null && selectedLevel !== level} />
       ))}
       <SlotField cfg={cfg} slots={snapshot.slots} palette={palette} selectedLevel={selectedLevel} onPick={flyTo} />
+      <SlotMarker cfg={cfg} slotKey={selectedSlotKey} palette={palette} />
       {lay.shafts.map((shaft) => (
         <Shaft key={shaft.id} cfg={cfg} shaft={shaft} resource={lifts[shaft.index]} palette={palette} />
       ))}
@@ -68,7 +70,7 @@ export function Viewport() {
   return (
     <Canvas
       dpr={[1, 1.75]}
-      shadows
+      shadows="percentage" // PCFShadowMap: three r186 removed PCFSoft, R3F's default
       camera={{ fov: DEFAULT_FOV, near: 0.5, far: 600, position: initial.pos.toArray() }}
       gl={{ antialias: true, powerPreference: 'high-performance' }}
       className="touch-none"

@@ -37,8 +37,8 @@ function Overlay() {
   const baysOut = snapshot?.resources.filter((r) => r.kind === 'bay_out') ?? [];
   const dot = (busy: boolean) => (busy ? '●' : '○');
   return (
-    <>
-      <div className="pointer-events-none absolute bottom-3 left-4 flex flex-col gap-2">
+    <div className="pointer-events-none absolute inset-x-4 bottom-3 flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+      <div className="flex flex-col gap-2">
         <p className="font-mono text-xs text-ink-soft">
           in {baysIn.map((b) => dot(!!b.busyWith)).join('')} · out {baysOut.map((b) => dot(!!b.busyWith)).join('')}
         </p>
@@ -56,14 +56,14 @@ function Overlay() {
           ))}
         </div>
       </div>
-      <div className="absolute right-4 bottom-3 flex gap-1" role="group" aria-label="Camera view">
+      <div className="pointer-events-auto flex flex-wrap gap-1" role="group" aria-label="Camera view">
         {VIEWS.map((v) => (
           <button key={v.id} type="button" aria-pressed={preset === v.id} className={chip(preset === v.id)} onClick={() => setPreset(v.id)}>
             {v.label}
           </button>
         ))}
       </div>
-    </>
+    </div>
   );
 }
 

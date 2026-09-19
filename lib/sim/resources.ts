@@ -4,7 +4,7 @@
 // DECISIONS E4 (bay_in < shuttle < lift < bay_out), enforced by how jobs.ts
 // sequences its requests.
 
-import { layout, zoneRange } from '../geometry.ts';
+import { layout } from '../geometry.ts';
 import { liftTravelTime, positionAt, shuttleTravelTime } from './kinematics.ts';
 import type { FacilityConfig, Resource, ResourceKind, ResourceMove } from './types.ts';
 
@@ -63,9 +63,9 @@ export class ResourceManager {
     for (const s of lay.shafts) this.add({ id: `lift-${s.id}`, kind: 'lift', zone: s.zone }, 0);
     for (let level = 0; level < cfg.levels; level++) {
       for (let z = 0; z < lay.zones; z++) {
-        // Shuttles rest at the west end of their zone.
+        // Shuttles start where idle shuttles rest: the centre of their zone.
         const id = lay.zones === 1 ? `shuttle-L${level + 1}` : `shuttle-L${level + 1}-${z + 1}`;
-        this.add({ id, kind: 'shuttle', level, zone: z }, zoneRange(cfg, z)[0] + 1);
+        this.add({ id, kind: 'shuttle', level, zone: z }, lay.zoneStartX[z] + (lay.colsPerZone[z] * cfg.pitch) / 2);
       }
     }
   }

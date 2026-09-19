@@ -117,6 +117,10 @@ will be adjusted.
   throughput/h, store P50/P90, retrieve P50/P95, lift and shuttle utilisation, queue max,
   rejected — everything the compare table (§5) needs.
 - **E18 — `derivedFrom`.** Added as an optional field on `FacilityConfig`.
+- **E20 — shuttle start position.** Shuttles start at the centre of their zone, the same
+  place idle shuttles rest (E4), instead of the west end. Bench figures are unchanged
+  (the rest logic moved them there within the first 10 sim-seconds anyway); the scene
+  no longer shows six shuttles hanging in the west shaft at 00:00.
 - **E19 — bench runner.** `pnpm bench` runs `scripts/bench.ts` with Node's built-in
   `--experimental-strip-types` (Node 22.17 here) — no extra dependency. Consequences:
   engine files import each other with explicit `.ts` extensions and use `import type`
@@ -139,5 +143,31 @@ will be adjusted.
 - **S8** the timeline strip is built in M4.
 - **S9** hot zone = `ceil(levels / 3)` upper levels (A: 2, B: 2, C: 3).
 - **S10** Lighthouse is run with `npx lighthouse` (tool, not a dependency) in M6.
+- **S11 — React StrictMode is off** (`next.config.ts`). R3F 9.7's `Canvas` tears its
+  renderer down 500 ms after an unmount (`forceContextLoss`); StrictMode's simulated
+  unmount in development fires that while the same canvas is still mounted, so the dev
+  scene went black after "THREE.WebGLRenderer: Context Lost". Production builds are not
+  affected (verified). Revisit when upstream handles the double mount.
+- **S12 — dev handle.** Development builds expose `window.__avp`
+  (`components/scene/DevHandle.tsx`): `render()`, `frame()`, `time(n)`, `snapshot()`, the
+  stores and the presets. A hidden or headless tab gets no `requestAnimationFrame`, so
+  this is how the scene is driven and screenshot-checked without a visible window
+  (`scripts/screenshot.mjs` + `scripts/shots/*.js`, headless Chrome over CDP, no
+  dependencies). Stripped from production bundles.
+- **S13 — camera presets are fits, not positions.** `cameraGoal` fits the facility hull
+  (structure, bay markings, floor labels) into the frustum for the live aspect ratio
+  (`fitDistance`), so isometric / cutaway / shaft work for A–D and custom configs. Slot
+  focus (`flyTo`, index click) also isolates the slot's level and draws an amber ring
+  on the slot floor; a resize never moves the camera, only a new preset does.
+- **S14 — level isolation = two InstancedMeshes** (solid + ghost at opacity 0.15,
+  no depth write). The common case is one draw call; single-slot changes touch one
+  instance (no re-mount).
+- **S15 — quality.** `PCFShadowMap` (three r186 removed PCFSoft, R3F's default);
+  `AdaptiveQuality` drops shadows, then dpr to 1, when a 2 s window averages under
+  50 FPS, ignoring stalled frames (hidden tab) so a tab switch never degrades quality.
+  dpr is capped at 1.75 (SPEC §9).
+- **S16 — pins.** React/react-dom `~19.2` (R3F 9.7 peer range `<19.3`); `@types/three`
+  for strict typing; IBM Plex Mono is self-hosted (`public/fonts`, OFL) because drei
+  `Text` needs a font file, not a CSS font.
 - **M0** header name "AVP Simulator"; header 48 px, timeline 96 px; English UI; stacked
   layout under 1024 px; TypeScript 5.9 and Next 15.5 pinned.
