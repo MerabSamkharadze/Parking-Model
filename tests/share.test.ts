@@ -2,10 +2,11 @@
 // storage failures never break the app, at most 12 versions are kept.
 
 import { describe, expect, it } from 'vitest';
-import { MAX_VERSIONS, decodeSetup, deleteVersion, encodeSetup, loadVersions, saveVersion, shareUrl, type Setup, type StorageLike } from '@/lib/share';
-import { PRESETS, deriveConfig } from '@/lib/presets';
+import { MAX_RESIDENTS, MAX_VERSIONS, decodeSetup, deleteVersion, encodeSetup, loadVersions, saveVersion, shareUrl, type Setup, type StorageLike } from '@/lib/share';
+import { CONFIG_LIMITS, PRESETS, deriveConfig } from '@/lib/presets';
 import { PROFILES } from '@/lib/sim/demand';
 import { Engine } from '@/lib/sim/engine';
+import { layout } from '@/lib/geometry';
 
 function memoryStorage(fail = false): StorageLike & { data: Map<string, string> } {
   const data = new Map<string, string>();
@@ -56,6 +57,38 @@ describe('share link', () => {
     expect(decodeSetup('not-base64!!')).toBeNull();
     expect(decodeSetup(btoa('{"v":1,"config":{"id":"x"}}'))).toBeNull();
     expect(decodeSetup(btoa('[1,2,3]'))).toBeNull();
+    expect(decodeSetup(btoa('null'))).toBeNull();
+  });
+  it('never resolves a prototype key as a preset', () => {
+    for (const key of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      expect(decodeSetup(key)).toBeNull();
+      // a full config whose id happens to be a prototype key is just a custom config
+      const s = decodeSetup(btoa(JSON.stringify({ v: 1, config: { ...PRESETS.B, id: key } })));
+      expect(typeof s?.config.levels).toBe('number');
+      expect(() => layout(s!.config)).not.toThrow();
+    }
+  });
+  it('clamps a hostile payload into the supported range', () => {
+    const hostile = { ...PRESETS.B, id: 'x', derivedFrom: 'B', levels: 1e6, cols: 0, lifts: 1, shuttlesPerLevel: 2, baysIn: -3, slotMix: { ev: 5, oversize: -1 }, timings: { ...PRESETS.B.timings, insert: -100, scan: 'x' }, prefetchLeadMinutes: 1e9, allocator: 'random' };
+    const s = decodeSetup(btoa(JSON.stringify({ v: 1, config: hostile, demand: 'constructor', residents: 1e300, seed: -1 })));
+    expect(s).not.toBeNull();
+    const c = s!.config;
+    expect(c.levels).toBe(CONFIG_LIMITS.levels.max);
+    expect(c.cols).toBe(CONFIG_LIMITS.cols.min);
+    expect(c.shuttlesPerLevel).toBe(1); // a zone needs a lift
+    expect(c.baysIn).toBe(1);
+    expect(c.slotMix).toEqual({ ev: CONFIG_LIMITS.ev.max, oversize: 0 });
+    expect(c.timings.insert).toBe(PRESETS.B.timings.insert);
+    expect(c.timings.scan).toBe(PRESETS.B.timings.scan);
+    expect(c.prefetchLeadMinutes).toBe(15);
+    expect(c.allocator).toBe(PRESETS.B.allocator);
+    expect(s!.demandName).toBe('weekday');
+    expect(s!.residents).toBe(MAX_RESIDENTS);
+    expect(s!.seed).toBe(0);
+    // and it boots: a full day runs without throwing
+    const e = new Engine({ config: c, demand: PROFILES.weekday, seed: s!.seed, devChecks: true });
+    e.run(3600);
+    expect(e.snapshot().slots.length).toBe(c.levels * 2 * c.cols);
   });
 });
 

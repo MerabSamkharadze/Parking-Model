@@ -10,11 +10,12 @@
 
 import { useFrame } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef } from 'react';
-import { AdditiveBlending, Color, InstancedMesh, type MeshBasicMaterial, Object3D } from 'three';
+import { AdditiveBlending, Color, InstancedMesh, type MeshBasicMaterial, type MeshStandardMaterial, Object3D } from 'three';
 import { bounds, layout } from '@/lib/geometry';
 import type { FacilityConfig } from '@/lib/sim/types';
+import { useSimStore } from '@/store/useSimStore';
 import { type Setting, useUiStore } from '@/store/useUiStore';
-import { KERB_LANE_Z, STREET_FAR, STREET_NEAR, surfaceOpacity } from './Ground';
+import { KERB_LANE_Z, STREET_FAR, STREET_NEAR, surface, useSurfaceFade } from './Ground';
 import { CAR_MATERIALS } from './VehiclePool';
 import { PAINTS } from './carModels';
 import type { Palette } from './palette';
@@ -124,9 +125,13 @@ function Traffic({ perLane = 5, reduced }: { perLane?: number; reduced: boolean 
     return out;
   }, [perLane, baked.length]);
   const time = useRef(0);
-  useFrame((_, dt) => {
-    if (!reduced) time.current += Math.min(dt, 0.1);
+  useFrame(({ camera }, dt) => {
+    // scenery on wall-clock time (S38), but a paused sim is a frozen picture (SPEC §9)
+    if (!reduced && useSimStore.getState().running) time.current += Math.min(dt, 0.1);
     const t = time.current;
+    // from above, the near lane runs right under the camera: a car there
+    // fills a quarter of the frame, so it is skipped until it has passed
+    const cullSq = camera.position.y > 6 ? 30 * 30 : 0;
     baked.forEach((_, m) => {
       const [paint, rest] = refs.current[m];
       if (!paint || !rest) return;
@@ -137,6 +142,7 @@ function Traffic({ perLane = 5, reduced }: { perLane?: number; reduced: boolean 
         const along = (c.x0 + c.v * t) % TRAFFIC_LOOP;
         const x = lane.dir === 1 ? along - TRAFFIC_LOOP / 2 : TRAFFIC_LOOP / 2 - along;
         _obj.position.set(x, 0, lane.z);
+        if (cullSq && _obj.position.distanceToSquared(camera.position) < cullSq) continue;
         _obj.rotation.set(0, lane.dir === 1 ? 0 : Math.PI, 0);
         _obj.scale.set(1, 1, 1);
         _obj.updateMatrix();
@@ -194,9 +200,9 @@ function Lamps({ xs, z }: { xs: number[]; z: number }) {
     });
     m.instanceMatrix.needsUpdate = true;
   }, [xs, z]);
-  useFrame(({ camera }) => {
+  useFrame(() => {
     const m = pools.current;
-    if (m) (m.material as MeshBasicMaterial).opacity = 0.42 * surfaceOpacity(camera.position.y);
+    if (m) (m.material as MeshBasicMaterial).opacity = 0.42 * surface.opacity;
   });
   return (
     <group>
@@ -295,6 +301,10 @@ function Mall({ palette, minX, maxX }: { palette: Palette; minX: number; maxX: n
   const x0 = minX - 30;
   const x1 = maxX + 30;
   const zFront = -STREET_NEAR - 4;
+  // the canopy hangs over the north bays: it fades with the surface so the
+  // slot camera and the follow camera can look under it
+  const canopy = useRef<MeshStandardMaterial>(null);
+  useSurfaceFade(canopy, 0.15, 1);
   return (
     <group>
       <Block x={(x0 + x1) / 2} y={0} z={zFront - 26} w={x1 - x0} h={11} d={52} color="#151d22" />
@@ -311,7 +321,7 @@ function Mall({ palette, minX, maxX }: { palette: Palette; minX: number; maxX: n
       {/* entrance canopy over the pavement */}
       <mesh position={[(x0 + x1) / 2, 4.6, zFront + 4]} castShadow>
         <boxGeometry args={[18, 0.35, 8]} />
-        <meshStandardMaterial color="#232e34" roughness={0.6} />
+        <meshStandardMaterial ref={canopy} color="#232e34" roughness={0.6} transparent opacity={0.15} depthWrite={false} />
       </mesh>
     </group>
   );
@@ -380,6 +390,8 @@ function Trees({ count, xRange, zRange, seed, avoid }: { count: number; xRange: 
 
 function Courtyard({ cfg, minX, maxX }: { cfg: FacilityConfig; minX: number; maxX: number }) {
   const b = bounds(cfg);
+  const lawn = useRef<MeshStandardMaterial>(null);
+  useSurfaceFade(lawn, 0.1, 0.9); // the lawn lies over the pit: it opens with the lid
   const zFront = -STREET_NEAR - 4;
   const west = minX - 12;
   const east = maxX + 12;
@@ -394,7 +406,7 @@ function Courtyard({ cfg, minX, maxX }: { cfg: FacilityConfig; minX: number; max
       {/* lawn over the facility, between the blocks */}
       <mesh position={[(west + east) / 2, 0.012, (zFront + b.maxZ) / 2 - 2]} rotation-x={-Math.PI / 2} receiveShadow>
         <planeGeometry args={[east - west - 24, b.maxZ + 6 - zFront - 4]} />
-        <meshStandardMaterial color="#182e22" roughness={1} transparent opacity={0.75} depthWrite={false} />
+        <meshStandardMaterial ref={lawn} color="#182e22" roughness={1} transparent opacity={0.1} depthWrite={false} />
       </mesh>
       <Block x={(west + east) / 2} y={0} z={zFront - 8} w={east - west} h={17} d={16} color="#161e23" />
       <Windows x0={west} x1={east} y0={0} y1={17} z={zFront} facing={1} seed={41} litShare={0.5} pitchX={3.2} pitchY={3.3} />

@@ -51,3 +51,32 @@ describe('manual commands and rejects (SPEC §8.5, DECISIONS E11)', () => {
     expect(e.allVehicles.get(job.vehicleId)!.slotKey).toMatch(/^L1-/);
   });
 });
+
+describe('command edge cases found by the 2026-09-19 audit', () => {
+  it('calling a car mid-shuffle keeps its planned departure (it is not stranded)', () => {
+    const e = new Engine({ config: { ...PRESETS.B, nightDefrag: true }, demand: PROFILES.weekday, seed: 42, devChecks: true });
+    e.run(3 * 3600 + 1); // 03:00 — night defrag creates shuffle jobs
+    const shuffle = [...e.activeJobs.values()].find((j) => j.kind === 'shuffle');
+    expect(shuffle).toBeDefined();
+    const id = shuffle!.vehicleId;
+    const planned = e.allVehicles.get(id)!.plannedDeparture!;
+    expect(e.callVehicle(id)).toBeNull(); // being moved: the call does not take
+    expect(e.allVehicles.get(id)!.plannedDeparture).toBe(planned);
+    e.run(9 * 3600); // noon: its habitual morning departure must still have happened
+    expect(e.allVehicles.get(id)!.state).toBe('gone');
+  });
+  it('setFailure with an unknown id is a no-op', () => {
+    const e = new Engine({ config: PRESETS.B, demand: quiet, seed: 1, devChecks: true });
+    expect(() => e.setFailure('lift', 'lift-Z', true)).not.toThrow();
+    expect(() => e.setFailure('shuttle', 'nope', true)).not.toThrow();
+    expect(e.metrics().degraded).toBe(false);
+  });
+  it('one lift with two shuttles per level runs one zone, so no job can wait forever', () => {
+    const cfg = { ...PRESETS.B, lifts: 1, shuttlesPerLevel: 2 };
+    const e = new Engine({ config: cfg, demand: PROFILES.weekday, seed: 42, devChecks: true });
+    e.run(24 * 3600);
+    const stuck = [...e.activeJobs.values()].filter((j) => j.stageEndsAt === Infinity && e.t - j.stageStartedAt > 3 * 3600);
+    expect(stuck).toEqual([]);
+    expect(e.metrics().completedStore).toBeGreaterThan(100);
+  });
+});

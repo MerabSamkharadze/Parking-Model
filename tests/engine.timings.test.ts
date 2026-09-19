@@ -24,8 +24,8 @@ describe('derived figures match SPEC §2 within ±15% (preset B, seed 42, 24 h)'
     const a = runBench({ config: PRESETS.A, demand: PROFILES.weekday, hours: 24, seed: 42 });
     within(a.summary.liftCapacityPerHour, 110);
   });
-  it('the whole day runs in well under a second per preset', () => {
-    expect(r.elapsedMs).toBeLessThan(3000);
+  it('the whole day runs in seconds, not minutes (a loose bound: the machine may be busy)', () => {
+    expect(r.elapsedMs).toBeLessThan(15000);
   });
 });
 

@@ -5,7 +5,7 @@
 // sequences its requests.
 
 import { layout } from '../geometry.ts';
-import { liftTravelTime, positionAt, shuttleTravelTime } from './kinematics.ts';
+import { liftTravelTime, positionAt, rampFor, shuttleTravelTime } from './kinematics.ts';
 import type { FacilityConfig, Resource, ResourceKind, ResourceMove } from './types.ts';
 
 const WINDOW_MINUTES = 15;
@@ -250,7 +250,7 @@ export class ResourceManager {
       r.pos = target;
       return t;
     }
-    const move: ResourceMove = { from, to: target, start: t, end: t + dur };
+    const move: ResourceMove = { from, to: target, start: t, end: t + dur, ramp: rampFor(this.cfg.timings, r.kind === 'lift' ? 'lift' : 'shuttle', dur) };
     r.move = move;
     r.pos = target;
     return move.end;

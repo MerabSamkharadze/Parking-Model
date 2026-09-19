@@ -7,12 +7,11 @@
 import { Text } from '@react-three/drei';
 import { useEffect, useMemo, useRef } from 'react';
 import { BoxGeometry, type LineBasicMaterial, type MeshStandardMaterial } from 'three';
-import { layout, levelY } from '@/lib/geometry';
+import { SLAB_THICKNESS, layout, levelY } from '@/lib/geometry';
 import type { FacilityConfig } from '@/lib/sim/types';
 import { LABEL_FONT } from './SurfaceDeck';
 import type { Palette } from './palette';
 
-const SLAB_THICKNESS = 0.22;
 export const GHOST_OPACITY = 0.15;
 
 export function LevelSlab({ cfg, level, palette, dimmed }: { cfg: FacilityConfig; level: number; palette: Palette; dimmed: boolean }) {

@@ -1,19 +1,20 @@
 'use client';
 
 // SPEC §9: flat amber unit per level (per zone in preset C). X is read every
-// frame from the engine's shuttle move (metres along the corridor).
+// frame from the engine's shuttle move (metres along the corridor), held at
+// the dock beside a shaft instead of inside it (DECISIONS S41).
 
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
 import type { Mesh, MeshStandardMaterial } from 'three';
-import { levelY } from '@/lib/geometry';
+import { SHUTTLE_LENGTH, levelY } from '@/lib/geometry';
 import type { FacilityConfig } from '@/lib/sim/types';
 import { useSimStore } from '@/store/useSimStore';
 import { GHOST_OPACITY } from './LevelSlab';
-import { SHUTTLE_HEIGHT, shuttleXAt } from './motion';
+import { SHUTTLE_HEIGHT, drawnShuttleXAt } from './motion';
 import type { Palette } from './palette';
 
-export const SHUTTLE_SIZE = { x: 4.6, y: SHUTTLE_HEIGHT, z: 2.0 } as const;
+export const SHUTTLE_SIZE = { x: SHUTTLE_LENGTH, y: SHUTTLE_HEIGHT, z: 2.0 } as const;
 
 export function Shuttle({ cfg, shuttleId, level, palette, dimmed }: { cfg: FacilityConfig; shuttleId: string; level: number; palette: Palette; dimmed: boolean }) {
   const mesh = useRef<Mesh>(null);
@@ -32,7 +33,7 @@ export function Shuttle({ cfg, shuttleId, level, palette, dimmed }: { cfg: Facil
     if (!m) return;
     const { resourcesById, clock } = useSimStore.getState();
     const r = resourcesById.get(shuttleId);
-    if (r) m.position.x = shuttleXAt(r, clock.t);
+    if (r) m.position.x = drawnShuttleXAt(cfg, r, clock.t);
   });
   const y = levelY(cfg, level) + SHUTTLE_SIZE.y / 2 + 0.02;
   return (

@@ -8,7 +8,7 @@
 
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import { InstancedMesh, MeshStandardMaterial, Object3D } from 'three';
-import { slotPosition } from '@/lib/geometry';
+import { parkedZ, slotPosition } from '@/lib/geometry';
 import type { FacilityConfig, Slot } from '@/lib/sim/types';
 import { GHOST_OPACITY } from './LevelSlab';
 import { CAR_MATERIALS } from './VehiclePool';
@@ -48,12 +48,14 @@ export function ParkedCars({ cfg, slots, sliding, selectedLevel }: { cfg: Facili
   useLayoutEffect(() => {
     placements.forEach((p, m) => {
       const r = refs.current[m];
+      const length = baked[m]?.length ?? 4.4;
       const write = (paint: InstancedMesh | null, rest: InstancedMesh | null, list: Array<{ s: Slot; paint: number }>) => {
         if (!paint || !rest) return;
         list.forEach((e, i) => {
           const pos = slotPosition(cfg, e.s.id);
           const k = e.s.cls === 'oversize' ? OVERSIZE_SCALE : 1;
-          _obj.position.set(pos.x, pos.y, pos.z);
+          // at the back of the slot, where the insert animation leaves it (S40)
+          _obj.position.set(pos.x, pos.y, parkedZ(cfg, e.s.id.row, length * k));
           _obj.rotation.set(0, e.s.id.row === 0 ? Math.PI / 2 : -Math.PI / 2, 0);
           _obj.scale.set(k, k, k);
           _obj.updateMatrix();
@@ -70,7 +72,7 @@ export function ParkedCars({ cfg, slots, sliding, selectedLevel }: { cfg: Facili
       write(r.solidPaint, r.solidRest, p.solid);
       write(r.ghostPaint, r.ghostRest, p.ghost);
     });
-  }, [placements, cfg]);
+  }, [placements, cfg, baked]);
 
   const set = (m: number, key: keyof Set4) => (el: InstancedMesh | null) => {
     refs.current[m][key] = el;

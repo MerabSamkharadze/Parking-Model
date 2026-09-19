@@ -7,11 +7,14 @@
 // render clock `t` may run a fraction of a tick ahead of the snapshot, so
 // everything is clamped to the stage/move it knows about.
 
-import { bayPosition, layout, levelY, liftY, parseSlotKey, queuePosition, rowZ, slotPosition, slotX } from '@/lib/geometry';
+import { bayPosition, drawnShuttleX, layout, levelY, liftY, parkedZ, parseSlotKey, queuePosition, slotPosition, slotX } from '@/lib/geometry';
 import { positionAt } from '@/lib/sim/kinematics';
 import type { FacilityConfig, Job, Resource, SimSnapshot, SlotClass } from '@/lib/sim/types';
 
-export const SHUTTLE_HEIGHT = 0.3;
+/** Height of the shuttle's comb deck: a car rides this far above the level floor. */
+export const SHUTTLE_HEIGHT = 0.2;
+/** Car length assumed when the caller cannot tell the drawn model (tests, fallbacks). */
+export const DEFAULT_CAR_LENGTH = 4.4;
 /** Cars drawn waiting on the street, at most (the panel shows the real number). */
 export const QUEUE_DRAWN = 6;
 export const POOL_SIZE = 40;
@@ -29,6 +32,9 @@ export interface Placement {
 const SLOT_YAW = Math.PI / 2;
 /** Share of the drop-off dwell spent driving into the bay. */
 const ARRIVE_SHARE = 0.2;
+/** Insert / extract: share of the stage spent on the quarter turn in the corridor
+ *  (the rest is the push into the slot). DECISIONS S40. */
+const TURN_SHARE = 0.5;
 
 export function progressAt(job: Job, t: number): number {
   const span = job.stageEndsAt - job.stageStartedAt;
@@ -42,6 +48,11 @@ export function liftLevelAt(r: Resource, t: number): number {
 
 export function shuttleXAt(r: Resource, t: number): number {
   return positionAt(r.move, r.pos, t);
+}
+
+/** Where the scene draws a shuttle: the engine's x, held at the dock outside a shaft (S41). */
+export function drawnShuttleXAt(cfg: FacilityConfig, r: Resource, t: number): number {
+  return drawnShuttleX(cfg, r.zone ?? 0, shuttleXAt(r, t));
 }
 
 /** Shaft x for a lift resource id ("lift-W" → shaft W). */
@@ -69,6 +80,12 @@ interface Ctx {
   cfg: FacilityConfig;
   resources: ReadonlyMap<string, Resource>;
   t: number;
+  /** Length of the car as drawn (the scene knows the model; tests use the default). */
+  lengthOf?: (vehicleId: string) => number;
+}
+
+function lengthOf(ctx: Ctx, vehicleId: string): number {
+  return ctx.lengthOf ? ctx.lengthOf(vehicleId) : DEFAULT_CAR_LENGTH;
 }
 
 function onLift(ctx: Ctx, job: Job, p: Placement): boolean {
@@ -84,7 +101,7 @@ function onLift(ctx: Ctx, job: Job, p: Placement): boolean {
 function onShuttle(ctx: Ctx, job: Job, p: Placement): boolean {
   const sh = job.resources.shuttle ? ctx.resources.get(job.resources.shuttle) : undefined;
   if (!sh) return false;
-  p.x = shuttleXAt(sh, ctx.t);
+  p.x = drawnShuttleXAt(ctx.cfg, sh, ctx.t);
   p.y = levelY(ctx.cfg, sh.level ?? 0) + SHUTTLE_HEIGHT;
   p.z = 0;
   p.yaw = 0;
@@ -102,19 +119,31 @@ function inBay(ctx: Ctx, job: Job, p: Placement): boolean {
   return true;
 }
 
-/** Slot ↔ corridor slide with the quarter turn (SPEC §9 "rotate + push"). k = 0 in the corridor, 1 in the slot. */
+/**
+ * Slot ↔ corridor with the quarter turn (SPEC §9 "rotate + push", DECISIONS S40).
+ * k = 0 on the shuttle in the corridor, 1 parked. The turn happens in place at the
+ * corridor centre (the car's turning circle only reaches into the slot mouths, which
+ * parked cars leave free — `parkedZ`), then the comb pushes the car straight into the
+ * slot and sets it down at the back. Extract is the same path backwards.
+ */
 function slideSlot(ctx: Ctx, job: Job, slotKeyName: string, k: number, p: Placement): boolean {
   const id = parseSlotKey(slotKeyName);
   const pos = slotPosition(ctx.cfg, id);
-  const kk = smooth(k);
+  const turn = smooth(Math.min(1, k / TURN_SHARE));
+  const push = smooth(Math.max(0, (k - TURN_SHARE) / (1 - TURN_SHARE)));
+  const target = parkedZ(ctx.cfg, id.row, lengthOf(ctx, job.vehicleId));
   p.x = slotX(ctx.cfg, id.col);
-  p.y = lerp(pos.y + SHUTTLE_HEIGHT, pos.y, kk); // the shuttle's arms set it down on the slot floor
-  p.z = lerp(0, rowZ(ctx.cfg, id.row), kk);
-  p.yaw = SLOT_YAW * kk * (id.row === 0 ? 1 : -1);
+  p.y = lerp(pos.y + SHUTTLE_HEIGHT, pos.y, push); // set down on the slot floor at the end of the push
+  p.z = lerp(0, target, push);
+  p.yaw = SLOT_YAW * turn * (id.row === 0 ? 1 : -1);
   return true;
 }
 
-/** Lift ↔ shuttle exchange at the shaft: the car changes height only. up = true: shuttle → lift (car sinks). */
+/**
+ * Lift ↔ shuttle exchange (DECISIONS S41): the shuttle waits at the dock outside the
+ * shaft and its telescopic comb slides the car between the platform (shaft centre,
+ * platform top flush with the floor) and its own deck. toLift = true: shuttle → lift.
+ */
 function exchange(ctx: Ctx, job: Job, toLift: boolean, k: number, p: Placement): boolean {
   const lift = job.resources.lift ? ctx.resources.get(job.resources.lift) : undefined;
   const sh = job.resources.shuttle ? ctx.resources.get(job.resources.shuttle) : undefined;
@@ -122,25 +151,44 @@ function exchange(ctx: Ctx, job: Job, toLift: boolean, k: number, p: Placement):
   if (!carrier) return false;
   const level = lift ? liftLevelAt(lift, ctx.t) : (sh!.level ?? 0) + 1;
   const floor = liftY(ctx.cfg, level);
-  const from = toLift ? floor + SHUTTLE_HEIGHT : floor;
-  const to = toLift ? floor : floor + SHUTTLE_HEIGHT;
-  p.x = lift ? shaftXOf(ctx.cfg, lift.id) : shuttleXAt(sh!, ctx.t);
-  p.y = lerp(from, to, smooth(k));
+  const shaftX = lift ? shaftXOf(ctx.cfg, lift.id) : shuttleXAt(sh!, ctx.t);
+  const dockX = sh ? drawnShuttleXAt(ctx.cfg, sh, ctx.t) : shaftX;
+  const kk = smooth(k);
+  const yFrom = toLift ? floor + SHUTTLE_HEIGHT : floor;
+  const yTo = toLift ? floor : floor + SHUTTLE_HEIGHT;
+  const xFrom = toLift ? dockX : shaftX;
+  const xTo = toLift ? shaftX : dockX;
+  p.x = lerp(xFrom, xTo, kk);
+  p.y = lerp(yFrom, yTo, kk);
   p.z = 0;
   p.yaw = 0;
   return true;
 }
 
+/**
+ * Deck transfer between a bay and a shaft on the surface trolley (DECISIONS S42):
+ * an L-shaped path along the bay's approach to the transfer lane (z = 0), then along
+ * the lane to the shaft, at constant speed over the engine's transfer time.
+ */
 function bayToLift(ctx: Ctx, job: Job, toLift: boolean, k: number, p: Placement): boolean {
   const lift = job.resources.lift ? ctx.resources.get(job.resources.lift) : undefined;
   const bay = job.resources.bay ?? job.bay; // a store's bay is released before the transfer starts
   if (!lift || !bay) return false;
   const b = bayOf(ctx.cfg, bay);
   const lx = shaftXOf(ctx.cfg, lift.id);
-  const kk = smooth(k);
-  p.x = toLift ? lerp(b.x, lx, kk) : lerp(lx, b.x, kk);
+  const legZ = Math.abs(b.z);
+  const legX = Math.abs(lx - b.x);
+  const total = legZ + legX;
+  // distance travelled from the bay end of the path
+  const d = smooth(toLift ? k : 1 - k) * total;
+  if (d <= legZ) {
+    p.x = b.x;
+    p.z = b.z - Math.sign(b.z) * d;
+  } else {
+    p.x = lerp(b.x, lx, total > legZ ? (d - legZ) / legX : 1);
+    p.z = 0;
+  }
   p.y = 0;
-  p.z = toLift ? lerp(b.z, 0, kk) : lerp(0, b.z, kk);
   p.yaw = 0;
   return true;
 }
@@ -248,8 +296,15 @@ export function slidingSlots(snapshot: SimSnapshot): Set<string> {
  * All cars to draw this frame, written into `out` (pre-allocated, POOL_SIZE
  * entries); returns how many are used. Nothing is allocated per frame.
  */
-export function placeVehicles(cfg: FacilityConfig, snapshot: SimSnapshot, resources: ReadonlyMap<string, Resource>, t: number, out: Placement[]): number {
-  const ctx: Ctx = { cfg, resources, t };
+export function placeVehicles(
+  cfg: FacilityConfig,
+  snapshot: SimSnapshot,
+  resources: ReadonlyMap<string, Resource>,
+  t: number,
+  out: Placement[],
+  lengthOf: (vehicleId: string) => number = () => DEFAULT_CAR_LENGTH,
+): number {
+  const ctx: Ctx = { cfg, resources, t, lengthOf };
   let n = 0;
   let queued = 0;
   for (const job of snapshot.jobs) {

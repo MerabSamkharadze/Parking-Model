@@ -5,11 +5,13 @@
 // (private mode, quota, disabled storage). Pure TypeScript: the storage is
 // injected so the logic is testable in Node.
 
-import { PRESETS, presetById } from './presets.ts';
+import { normalizeConfig, presetById } from './presets.ts';
 import { PROFILES } from './sim/demand.ts';
 import type { DemandProfile, FacilityConfig } from './sim/types.ts';
 
 export const SHARE_PARAM = 'v';
+/** More residents than any supported facility holds (10 levels × 2 × 24 = 480 slots). */
+export const MAX_RESIDENTS = 1000;
 export const MAX_VERSIONS = 12;
 export const VERSIONS_KEY = 'avp.versions.v1';
 
@@ -63,20 +65,22 @@ export function encodeSetup(setup: Setup): string {
   return toBase64Url(JSON.stringify(payload));
 }
 
-const NUMERIC: Array<keyof FacilityConfig> = ['levels', 'cols', 'levelHeight', 'pitch', 'slotDepth', 'corridorWidth', 'lifts', 'baysIn', 'baysOut', 'shuttlesPerLevel', 'prefetchLeadMinutes'];
+const DEMANDS: DemandProfile['name'][] = ['weekday', 'saturday', 'stress'];
 
-function validConfig(c: unknown): c is FacilityConfig {
-  if (!c || typeof c !== 'object') return false;
-  const o = c as Record<string, unknown>;
-  if (typeof o.id !== 'string' || typeof o.label !== 'string') return false;
-  for (const k of NUMERIC) if (typeof o[k] !== 'number' || !Number.isFinite(o[k] as number)) return false;
-  if (o.rows !== 2) return false;
-  const mix = o.slotMix as Record<string, unknown> | undefined;
-  if (!mix || typeof mix.ev !== 'number' || typeof mix.oversize !== 'number') return false;
-  const t = o.timings as Record<string, unknown> | undefined;
-  if (!t || typeof t.dropOff !== 'number' || typeof t.liftPerLevel !== 'number') return false;
-  if (!['nearest', 'zoned', 'balanced', 'dwell-aware'].includes(o.allocator as string)) return false;
-  return typeof o.nightDefrag === 'boolean';
+/** A config from outside (share link, storage): a preset id maps back to the
+ *  built-in object, anything else is clamped field by field (`normalizeConfig`),
+ *  so nothing that reaches the engine or the layout is out of range. */
+function sanitizeConfig(c: unknown): FacilityConfig | null {
+  if (!c || typeof c !== 'object') return null;
+  const o = c as Partial<FacilityConfig>;
+  if (typeof o.id !== 'string') return null;
+  const preset = presetById(o.id);
+  if (preset && !o.derivedFrom) return preset; // presets are canonical objects
+  // garbage (no facility in it) is rejected; a facility out of range is clamped
+  for (const k of ['levels', 'cols', 'lifts', 'baysIn', 'baysOut', 'shuttlesPerLevel'] as const) if (typeof o[k] !== 'number') return null;
+  if (!o.timings || typeof o.timings !== 'object' || !o.slotMix || typeof o.slotMix !== 'object') return null;
+  const origin = typeof o.derivedFrom === 'string' ? presetById(o.derivedFrom) : undefined;
+  return normalizeConfig(o, origin);
 }
 
 /** Parses a `?v=` value; null when it is missing, malformed or not ours. */
@@ -87,13 +91,13 @@ export function decodeSetup(value: string | null | undefined): Setup | null {
   const text = fromBase64Url(value);
   if (!text) return null;
   try {
-    const p = JSON.parse(text) as Partial<SharePayload>;
-    if (p.v !== 1 || !validConfig(p.config)) return null;
-    const demandName = (['weekday', 'saturday', 'stress'] as const).includes(p.demand as DemandProfile['name']) ? (p.demand as DemandProfile['name']) : 'weekday';
-    const residents = typeof p.residents === 'number' && p.residents >= 0 ? Math.round(p.residents) : PROFILES[demandName].residents;
-    const seed = typeof p.seed === 'number' && Number.isFinite(p.seed) ? Math.round(p.seed) : 42;
-    // presets are canonical objects: a shared preset id maps back to the built-in
-    const config = !p.config.derivedFrom && presetById(p.config.id) ? PRESETS[p.config.id as keyof typeof PRESETS] : p.config;
+    const p = JSON.parse(text) as Partial<SharePayload> | null;
+    if (!p || typeof p !== 'object' || p.v !== 1) return null;
+    const config = sanitizeConfig(p.config);
+    if (!config) return null;
+    const demandName = DEMANDS.includes(p.demand as DemandProfile['name']) ? (p.demand as DemandProfile['name']) : 'weekday';
+    const residents = typeof p.residents === 'number' && Number.isFinite(p.residents) ? Math.min(MAX_RESIDENTS, Math.max(0, Math.round(p.residents))) : PROFILES[demandName].residents;
+    const seed = typeof p.seed === 'number' && Number.isFinite(p.seed) ? Math.max(0, Math.round(p.seed)) >>> 0 : 42;
     return { config, demandName, residents, seed };
   } catch {
     return null;
@@ -121,7 +125,16 @@ export function loadVersions(storage: StorageLike | null): SavedVersion[] {
     if (!raw) return [];
     const list = JSON.parse(raw) as unknown;
     if (!Array.isArray(list)) return [];
-    return list.filter((v): v is SavedVersion => !!v && typeof v === 'object' && typeof (v as SavedVersion).id === 'string' && validConfig((v as SavedVersion).config)).slice(0, MAX_VERSIONS);
+    const out: SavedVersion[] = [];
+    for (const v of list) {
+      if (!v || typeof v !== 'object') continue;
+      const s = v as SavedVersion;
+      const config = sanitizeConfig(s.config);
+      if (typeof s.id !== 'string' || typeof s.label !== 'string' || !config) continue;
+      out.push({ ...s, config, demandName: DEMANDS.includes(s.demandName) ? s.demandName : 'weekday', residents: typeof s.residents === 'number' ? Math.min(MAX_RESIDENTS, Math.max(0, Math.round(s.residents))) : PROFILES.weekday.residents, seed: typeof s.seed === 'number' ? Math.max(0, Math.round(s.seed)) >>> 0 : 42 });
+      if (out.length >= MAX_VERSIONS) break;
+    }
+    return out;
   } catch {
     return [];
   }

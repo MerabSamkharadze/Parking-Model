@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PRESETS } from '../lib/presets.ts';
 import {
+  SLAB_THICKNESS,
   bounds,
   corridorDistance,
   layout,
@@ -25,8 +26,8 @@ describe('geometry (SPEC §2/§9, DECISIONS E2/E3/S3)', () => {
     ]);
     expect(rowZ(B, 0)).toBeCloseTo(-4.4);
     expect(rowZ(B, 1)).toBeCloseTo(4.4);
-    expect(levelY(B, 0)).toBeCloseTo(-1.9);
-    expect(levelY(B, 5)).toBeCloseTo(-11.4);
+    expect(levelY(B, 0)).toBeCloseTo(-(1.9 + SLAB_THICKNESS)); // clear height + slab (DECISIONS S39)
+    expect(levelY(B, 5)).toBeCloseTo(-6 * (1.9 + SLAB_THICKNESS));
     expect(slotX(B, 0)).toBeCloseTo(-14.3);
     expect(slotX(B, 11)).toBeCloseTo(14.3);
     expect(corridorDistance(B, 0, 0)).toBeCloseTo(4.2);

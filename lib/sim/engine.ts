@@ -400,10 +400,14 @@ export class Engine {
       }
     }
     if (!v) return null;
-    // drop the scheduled departure, it is happening now
-    const i = this.departures.findIndex((d) => d.vehicleId === v!.id);
-    if (i >= 0) this.departures.splice(i, 1);
-    return this.callVehicleAt(v, this.t, false);
+    const job = this.callVehicleAt(v, this.t, false);
+    // the car is leaving now: drop its scheduled departure — but only when the call
+    // took (a car mid-shuffle or already called keeps its plan, else it is stranded)
+    if (job) {
+      const i = this.departures.findIndex((d) => d.vehicleId === v!.id);
+      if (i >= 0) this.departures.splice(i, 1);
+    }
+    return job;
   }
 
   setAllocator(name: AllocatorName): void {
@@ -442,8 +446,8 @@ export class Engine {
       return;
     }
     if (!id) return;
-    const r = this.rm.get(id);
-    if (r.down === down) return;
+    const r = this.rm.resources.find((x) => x.id === id);
+    if (!r || r.down === down) return;
     r.down = down;
     this.log(down ? 'FAIL' : 'RECOVER', `${down ? 'FAIL' : 'RECOVER'} ${id}`);
     if (down) {

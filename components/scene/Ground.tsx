@@ -10,8 +10,8 @@
 // evaluated per pixel twice over (the frame and the lid are both drawn).
 
 import { useFrame } from '@react-three/fiber';
-import { useMemo, useRef } from 'react';
-import { BufferGeometry, Float32BufferAttribute, type MeshLambertMaterial } from 'three';
+import { useMemo, useRef, type RefObject } from 'react';
+import { BufferGeometry, Float32BufferAttribute, type Material, type MeshLambertMaterial, type Vector3 } from 'three';
 import { bounds, layout } from '@/lib/geometry';
 import type { FacilityConfig } from '@/lib/sim/types';
 import type { Palette } from './palette';
@@ -23,10 +23,32 @@ export const STREET_FAR = 24;
 export const KERB_LANE_Z = 21.4; // parked cars along the far kerb
 const LID_MIN = 0.12;
 
-/** How solid the surface is for a camera at height y: see-through from above, opaque at eye level. */
-export function surfaceOpacity(cameraY: number): number {
-  const k = Math.min(1, Math.max(0, (8 - cameraY) / 4.5));
-  return LID_MIN + (1 - LID_MIN) * k;
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+
+/** How solid the surface is: see-through from above, opaque at eye level —
+ *  unless the camera is looking at something underground (a followed car on
+ *  the lift, a slot in focus), when the ground opens up whatever the height. */
+export function surfaceOpacity(cameraY: number, targetY = 0): number {
+  const low = clamp01((8 - cameraY) / 4.5);
+  const above = clamp01((targetY + 0.4) / 1.0);
+  return LID_MIN + (1 - LID_MIN) * low * above;
+}
+
+/** This frame's surface opacity (written by Ground, read by everything that
+ *  sits on the surface and must fade with it: bay pads, lamp pools, lawn, canopy). */
+export const surface = { opacity: LID_MIN, get k() { return (this.opacity - LID_MIN) / (1 - LID_MIN); } };
+
+/** Fade a material between `min` (dollhouse view) and `max` (street level) with the surface. */
+export function useSurfaceFade(ref: RefObject<Material | null>, min: number, max: number): void {
+  useFrame(() => {
+    const m = ref.current;
+    if (!m) return;
+    const o = min + (max - min) * surface.k;
+    if (Math.abs(m.opacity - o) < 0.002) return;
+    m.opacity = o;
+    m.transparent = o < 0.999;
+    m.depthWrite = o > 0.6;
+  });
 }
 
 function dashes(x0: number, x1: number, z: number, dash = 3, gap = 3): BufferGeometry {
@@ -71,8 +93,10 @@ export function Ground({ cfg, palette }: { cfg: FacilityConfig; palette: Palette
 
   // the whole surface fades in as the camera drops towards the street, so the
   // dollhouse view from above keeps every level readable
-  useFrame(({ camera }) => {
-    const o = surfaceOpacity(camera.position.y);
+  useFrame(({ camera, controls }) => {
+    const target = (controls as { target?: Vector3 } | null)?.target;
+    const o = surfaceOpacity(camera.position.y, target ? target.y : 0);
+    surface.opacity = o;
     const apply = (m: MeshLambertMaterial | null, target: number) => {
       if (!m || Math.abs(m.opacity - target) < 0.002) return;
       m.opacity = target;

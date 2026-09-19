@@ -37,7 +37,7 @@ export function useStory() {
     ui.selectSlot(null);
     if (saved.current) {
       sim.setSpeed(saved.current.speed);
-      sim.setRunning(saved.current.running || true);
+      sim.setRunning(saved.current.running);
       ui.setSetting(saved.current.setting);
       ui.setCameraPreset(saved.current.preset === 'follow' ? 'isometric' : saved.current.preset);
       saved.current = null;
@@ -171,7 +171,7 @@ export function StoryOverlay() {
         type="button"
         onClick={start}
         disabled={!ready}
-        className="pointer-events-auto absolute top-3 left-4 rounded-sm border border-amber bg-panel/80 px-3 py-1 text-sm text-amber backdrop-blur-[2px] transition-colors hover:bg-amber hover:text-void disabled:opacity-40"
+        className="pointer-events-auto absolute top-3 left-4 rounded-sm border border-amber bg-panel px-3 py-1 text-sm text-amber transition-colors hover:bg-amber hover:text-void disabled:opacity-40"
       >
         ▶ Tour
       </button>
@@ -180,7 +180,7 @@ export function StoryOverlay() {
   const s = STORY[step];
   const last = step === STORY.length - 1;
   return (
-    <div className="pointer-events-auto absolute top-3 left-4 flex max-w-[460px] flex-col gap-3 rounded-sm border border-line bg-panel/90 p-4 backdrop-blur-[2px]" role="dialog" aria-label="Guided tour">
+    <div className="pointer-events-auto absolute inset-x-4 top-3 flex max-w-[460px] flex-col gap-3 rounded-sm border border-line bg-panel p-4" role="dialog" aria-label="Guided tour">
       <div className="flex items-center gap-2 font-mono text-[11px] text-ink-soft">
         <span>
           {step + 1} / {STORY.length}

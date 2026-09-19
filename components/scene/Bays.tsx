@@ -8,10 +8,11 @@
 
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
-import { AdditiveBlending, DoubleSide, type Mesh } from 'three';
+import { AdditiveBlending, DoubleSide, type Mesh, MeshStandardMaterial } from 'three';
 import { bayPosition } from '@/lib/geometry';
 import type { FacilityConfig } from '@/lib/sim/types';
 import { useSimStore } from '@/store/useSimStore';
+import { useSurfaceFade } from './Ground';
 import { progressAt } from './motion';
 import type { Palette } from './palette';
 
@@ -24,6 +25,10 @@ export function Bays({ cfg, palette }: { cfg: FacilityConfig; palette: Palette }
   const inputs = useMemo(() => Array.from({ length: cfg.baysIn }, (_, i) => bayPosition(cfg, 'bay_in', i)), [cfg]);
   const outputs = useMemo(() => Array.from({ length: cfg.baysOut }, (_, i) => bayPosition(cfg, 'bay_out', i)), [cfg]);
   const sweeps = useRef<Array<Mesh | null>>([]);
+  // one material for every pad: it sits on the lid and opens with it
+  const padMaterial = useMemo(() => new MeshStandardMaterial({ color: '#2b353b', roughness: 0.9, transparent: true, opacity: 0.25, depthWrite: false }), []);
+  const pad = useRef<MeshStandardMaterial>(padMaterial);
+  useSurfaceFade(pad, 0.25, 1);
 
   useFrame(() => {
     const { snapshot, clock } = useSimStore.getState();
@@ -47,7 +52,7 @@ export function Bays({ cfg, palette }: { cfg: FacilityConfig; palette: Palette }
       {[...inputs, ...outputs].map((b, i) => (
         <mesh key={i} position={[b.x, 0.012, b.z]} rotation-x={-Math.PI / 2} receiveShadow>
           <planeGeometry args={[BAY_W, BAY_D]} />
-          <meshStandardMaterial color="#2b353b" roughness={0.9} />
+          <primitive object={padMaterial} attach="material" />
         </mesh>
       ))}
       {inputs.map((b, i) => (

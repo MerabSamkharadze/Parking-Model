@@ -38,10 +38,19 @@ export function VehiclePool({ cfg, palette }: { cfg: FacilityConfig; palette: Pa
   const paintRefs = useRef<Array<InstancedMesh | null>>(CAR_MODELS.map(() => null));
   const restRefs = useRef<Array<InstancedMesh | null>>(CAR_MODELS.map(() => null));
 
+  // the drawn length of a car (its model × oversize scale): motion.ts parks it by its rear
+  const lengthOf = useMemo(
+    () => (vehicleId: string) => {
+      const oversize = useSimStore.getState().snapshot?.vehicles[vehicleId]?.cls === 'oversize';
+      const pick = pickModel(vehicleId, oversize);
+      return (baked[pick.model]?.length ?? 4.4) * (oversize ? OVERSIZE_SCALE : 1);
+    },
+    [baked],
+  );
   useFrame(() => {
     const { snapshot, resourcesById, clock } = useSimStore.getState();
     const followId = useUiStore.getState().followVehicleId;
-    const n = snapshot ? placeVehicles(cfg, snapshot, resourcesById, clock.t, _placements) : 0;
+    const n = snapshot ? placeVehicles(cfg, snapshot, resourcesById, clock.t, _placements, lengthOf) : 0;
     for (const o of _order) o.length = 0;
     followed.active = false;
     for (let i = 0; i < n; i++) {
