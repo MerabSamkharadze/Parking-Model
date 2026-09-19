@@ -16,7 +16,8 @@ import type { FacilityConfig } from '@/lib/sim/types';
 import { useSimStore } from '@/store/useSimStore';
 import { useUiStore } from '@/store/useUiStore';
 import { AdaptiveQuality } from './AdaptiveQuality';
-import { CameraRig, DEFAULT_FOV, cameraGoal } from './CameraRig';
+import { Bays } from './Bays';
+import { CameraRig, DEFAULT_FOV, cameraGoal, useReducedMotion } from './CameraRig';
 import { Context } from './Context';
 import { DevHandle } from './DevHandle';
 import { EnvironmentLight } from './EnvironmentLight';
@@ -30,7 +31,6 @@ import { SimDriver } from './SimDriver';
 import { SlotField } from './SlotField';
 import { SlotMarker } from './SlotMarker';
 import { Structure } from './Structure';
-import { Bays } from './Bays';
 import { SurfaceDeck } from './SurfaceDeck';
 import { VehiclePool } from './VehiclePool';
 import { slidingSlots } from './motion';
@@ -90,6 +90,7 @@ function Scene({ cfg, shadows, onShadows }: { cfg: FacilityConfig; shadows: bool
   const cameraNonce = useUiStore((s) => s.cameraNonce);
   const flyTo = useUiStore((s) => s.flyTo);
   const setting = useUiStore((s) => s.setting);
+  const reduced = useReducedMotion();
 
   return (
     <>
@@ -115,7 +116,7 @@ function Scene({ cfg, shadows, onShadows }: { cfg: FacilityConfig; shadows: bool
       <Suspense fallback={null}>
         <VehiclePool cfg={cfg} palette={palette} />
         {slots && <ParkedCars cfg={cfg} slots={slots} sliding={sliding} selectedLevel={selectedLevel} />}
-        <Context cfg={cfg} palette={palette} setting={setting} />
+        <Context cfg={cfg} palette={palette} setting={setting} reduced={reduced} />
       </Suspense>
       <EnvironmentLight />
       <CameraRig cfg={cfg} preset={cameraPreset} nonce={cameraNonce} selectedSlotKey={selectedSlotKey} selectedLevel={selectedLevel} />

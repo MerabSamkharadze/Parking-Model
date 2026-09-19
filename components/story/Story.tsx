@@ -38,6 +38,7 @@ export function useStory() {
     if (saved.current) {
       sim.setSpeed(saved.current.speed);
       sim.setRunning(saved.current.running || true);
+      ui.setSetting(saved.current.setting);
       ui.setCameraPreset(saved.current.preset === 'follow' ? 'isometric' : saved.current.preset);
       saved.current = null;
     }

@@ -27,6 +27,8 @@ export interface Placement {
 }
 
 const SLOT_YAW = Math.PI / 2;
+/** Share of the drop-off dwell spent driving into the bay. */
+const ARRIVE_SHARE = 0.2;
 
 export function progressAt(job: Job, t: number): number {
   const span = job.stageEndsAt - job.stageStartedAt;
@@ -154,7 +156,17 @@ export function placeJob(ctx: Ctx, job: Job, p: Placement): boolean {
   switch (job.kind) {
     case 'store':
       switch (job.stage) {
-        case 'bay':
+        case 'bay': {
+          // the driver pulls in from the head of the queue lane during the first
+          // fifth of the drop-off dwell, then the car stands in the bay
+          if (!inBay(ctx, job, p)) return false;
+          const drive = 1 - Math.min(1, k / ARRIVE_SHARE);
+          const q = queuePosition(ctx.cfg, 0);
+          const s = smooth(drive);
+          p.x = lerp(p.x, q.x, s);
+          p.z = lerp(p.z, q.z, s);
+          return true;
+        }
         case 'scan':
         case 'lift_wait':
           return inBay(ctx, job, p);

@@ -140,7 +140,7 @@ will be adjusted.
   large buildings and residential courtyards and solves the city's parking problem. This
   overrides SPEC §12 ("no GLTF, everything from primitives") for cars and raises the
   visual bar of §7/§9 without dropping the dark industrial identity. Delivered as M7
-  (see STATUS.md, decisions S32–S37); CC0 assets only (~330 KB of models in total), the
+  (see STATUS.md, decisions S32–S38); CC0 assets only (~330 KB of models in total), the
   engine untouched, every scene addition still driven by engine state (SPEC §0.3).
 
 ## Scene / UI (applied from M2 on)
@@ -310,5 +310,12 @@ will be adjusted.
 - **S37 — steel.** Instanced posts at every column boundary on both rows, shuttle guide
   rails per corridor, a light strip under each slab (one draw call each for the whole
   rack); the follow camera sits at (7, 4.5, 8.5) from the car, damped at 2.5 s⁻¹.
+- **S38 — the street lives.** Ten cars circulate on the two driving lanes (scenery on
+  wall-clock time — never engine state, SPEC §0.3 — frozen under reduced motion, hidden
+  with the rest of the near street in section views). A store's car now *arrives*: during
+  the first fifth of the drop-off dwell it drives from the head of the queue lane into its
+  bay (`motion.ts`, stage `bay`, engine-timed like everything else), so the follow camera
+  and the tour show a car pulling in, being scanned, and leaving the driver behind. The
+  app opens under the mall (`setting: 'mall'`), not in a void.
 - **M0** header name "AVP Simulator"; header 48 px, timeline 96 px; English UI; stacked
   layout under 1024 px; TypeScript 5.9 and Next 15.5 pinned.

@@ -226,7 +226,7 @@ CONFIG_LIMITS`, `lib/format.ts`, and the live `TimelineStrip` (throughput + queu
 | shortcuts | space → running; `3` → shaft view; `/` → search focused; esc → selection cleared |
 | gates | lint, typecheck, 61 tests, build green |
 
-## M7 — presentation (DECISIONS U1, S32–S37)
+## M7 — presentation (DECISIONS U1, S32–S38)
 
 - Real cars: `components/scene/carModels.ts` bakes the four CC0 models into paint / rest
   geometries; `VehiclePool` (moving, full detail), `ParkedCars` (parked field, LOD twin,
@@ -236,7 +236,11 @@ CONFIG_LIMITS`, `lib/format.ts`, and the live `TimelineStrip` (throughput + queu
   courtyard), `Structure` (posts, rails, light strips, ≤ 3 level lights), `Bays` (pads,
   scanner portals, scan sweep), `EnvironmentLight` (RoomEnvironment PMREM), fog.
 - Views: `street` and `follow` presets joined isometric / cutaway / shaft / slot; site and
-  view chips in the viewport overlay; `useUiStore.follow(id)` tracks any car.
+  view chips in the viewport overlay; `useUiStore.follow(id)` tracks any car; the app opens
+  under the mall.
+- Life: ambient traffic on the street (`Context › Traffic`, wall-clock scenery), and a
+  store's car drives from the queue lane into its bay during the first fifth of the
+  drop-off dwell (`motion.ts`), then is scanned, then leaves with the machine.
 - Tour: `lib/story.ts` (steps, exit rules — tested in `tests/story.test.ts`) and
   `components/story/Story.tsx` (drives the stores, captions, keyboard, `?tour=1`).
 - Dev handle grew `info()` (draw calls / triangles), `scene` and `camera` for profiling.

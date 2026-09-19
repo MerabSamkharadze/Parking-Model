@@ -57,7 +57,7 @@ DPR=2 node scripts/screenshot.mjs "http://localhost:3000/?tour=1" scripts/shots/
 | **Demand** | weekday / saturday / stress profiles, residents, `+ Car`, `− Retrieve` |
 | **Watch** | live occupancy per level, sparklines, percentiles, a searchable index that flies the camera to any car, the SQL-style event log, the 24 h timeline |
 | **Break it** | lift down, shuttle down, power loss — the scene turns clay, jobs freeze or re-route, the spare shuttle steps in |
-| **Look** | Isometric / Cutaway / Shaft / Slot / Street views, level isolation, a follow camera on any car; site chips put the facility under a mall, a tower or a courtyard |
+| **Look** | Isometric / Cutaway / Shaft / Slot / Street views, level isolation, a follow camera on any car; site chips put the facility under a mall, a tower or a courtyard; the street has traffic, kerb parking and lamps |
 
 <p>
   <img src="docs/screenshots/insert.jpg" alt="A car being rotated and pushed into slot L1-R2-03, level isolated" width="49%">

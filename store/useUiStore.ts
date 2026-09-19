@@ -42,7 +42,7 @@ export const useUiStore = create<UiState>((set) => ({
   selectedSlotKey: null,
   selectedVehicleId: null,
   followVehicleId: null,
-  setting: 'none',
+  setting: 'mall', // the pitch opens under a shopping centre (DECISIONS U1)
   storyStep: -1,
   setCameraPreset: (cameraPreset) => set((s) => ({ cameraPreset, cameraNonce: s.cameraNonce + 1, followVehicleId: cameraPreset === 'follow' ? s.followVehicleId : null })),
   toggleLevel: (level) => set((s) => ({ selectedLevel: s.selectedLevel === level ? null : level })),

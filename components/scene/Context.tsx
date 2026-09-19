@@ -101,6 +101,82 @@ function KerbCars({ from, to, gapEvery = 5 }: { from: number; to: number; gapEve
 
 // ---- street lamps ----------------------------------------------------------------
 
+// ---- cars passing on the street ----------------------------------------------------
+
+const TRAFFIC_LOOP = 260; // m of road the cars circulate on, centred on the pit
+const TRAFFIC_LANES: Array<{ z: number; dir: 1 | -1 }> = [
+  { z: STREET_NEAR + 3, dir: 1 },
+  { z: STREET_NEAR + 6.6, dir: -1 },
+];
+
+/** Ambient traffic: scenery on wall-clock time, never engine state (SPEC §0.3). Frozen under reduced motion. */
+function Traffic({ perLane = 5, reduced }: { perLane?: number; reduced: boolean }) {
+  const baked = useCarModels('lod');
+  const refs = useRef<Array<[InstancedMesh | null, InstancedMesh | null]>>(baked.map(() => [null, null]));
+  const cars = useMemo(() => {
+    const rnd = seeded(23);
+    const out: Array<{ lane: number; x0: number; v: number; model: number; paint: number }> = [];
+    TRAFFIC_LANES.forEach((_, lane) => {
+      for (let i = 0; i < perLane; i++) {
+        out.push({ lane, x0: (i + rnd() * 0.6) * (TRAFFIC_LOOP / perLane), v: 8 + rnd() * 3, model: Math.floor(rnd() * baked.length), paint: Math.floor(rnd() * PAINTS.length) });
+      }
+    });
+    return out;
+  }, [perLane, baked.length]);
+  const time = useRef(0);
+  useFrame((_, dt) => {
+    if (!reduced) time.current += Math.min(dt, 0.1);
+    const t = time.current;
+    baked.forEach((_, m) => {
+      const [paint, rest] = refs.current[m];
+      if (!paint || !rest) return;
+      let k = 0;
+      for (const c of cars) {
+        if (c.model !== m) continue;
+        const lane = TRAFFIC_LANES[c.lane];
+        const along = (c.x0 + c.v * t) % TRAFFIC_LOOP;
+        const x = lane.dir === 1 ? along - TRAFFIC_LOOP / 2 : TRAFFIC_LOOP / 2 - along;
+        _obj.position.set(x, 0, lane.z);
+        _obj.rotation.set(0, lane.dir === 1 ? 0 : Math.PI, 0);
+        _obj.scale.set(1, 1, 1);
+        _obj.updateMatrix();
+        paint.setMatrixAt(k, _obj.matrix);
+        rest.setMatrixAt(k, _obj.matrix);
+        paint.setColorAt(k, PAINTS[c.paint]);
+        k++;
+      }
+      paint.count = k;
+      rest.count = k;
+      paint.instanceMatrix.needsUpdate = true;
+      rest.instanceMatrix.needsUpdate = true;
+      if (paint.instanceColor) paint.instanceColor.needsUpdate = true;
+    });
+  });
+  return (
+    <group>
+      {baked.map((b, m) => (
+        <group key={b.id}>
+          <instancedMesh
+            ref={(el) => {
+              refs.current[m][0] = el;
+            }}
+            args={[b.paint, CAR_MATERIALS.paint, cars.length]}
+            castShadow
+            frustumCulled={false}
+          />
+          <instancedMesh
+            ref={(el) => {
+              refs.current[m][1] = el;
+            }}
+            args={[b.rest, CAR_MATERIALS.rest, cars.length]}
+            frustumCulled={false}
+          />
+        </group>
+      ))}
+    </group>
+  );
+}
+
 function Lamps({ xs, z }: { xs: number[]; z: number }) {
   // pools of light on the asphalt: additive discs, no light sources (each
   // real point light is paid for by every lit pixel), faded with the surface
@@ -330,7 +406,7 @@ function Courtyard({ cfg, minX, maxX }: { cfg: FacilityConfig; minX: number; max
   );
 }
 
-export function Context({ cfg, palette, setting }: { cfg: FacilityConfig; palette: Palette; setting: Setting }) {
+export function Context({ cfg, palette, setting, reduced }: { cfg: FacilityConfig; palette: Palette; setting: Setting; reduced: boolean }) {
   const b = useMemo(() => bounds(cfg), [cfg]);
   const lampXs = useMemo(() => {
     const out: number[] = [];
@@ -347,6 +423,7 @@ export function Context({ cfg, palette, setting }: { cfg: FacilityConfig; palett
       <group visible={street}>
         <Lamps xs={lampXs} z={STREET_NEAR - 1} />
         <KerbCars from={-96} to={96} />
+        <Traffic reduced={reduced} />
       </group>
       {/* a couple of warm lights over the bays for the street scenes */}
       <pointLight position={[b.minX + 4, 6.5, 0]} color="#ffd9a0" intensity={70} distance={40} decay={2} />
