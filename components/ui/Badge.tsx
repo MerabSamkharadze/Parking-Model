@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 const TONES = {
   neutral: 'border-line text-ink-soft',
   amber: 'border-amber text-amber',
-  clay: 'border-clay text-clay',
+  clay: 'border-clay text-clay-text',
   data: 'border-data text-data',
   lime: 'border-lime text-lime',
 } as const;

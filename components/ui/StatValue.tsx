@@ -40,7 +40,7 @@ export function RollingNumber({ value, className = '' }: { value: string; classN
 }
 
 export function StatValue({ label, value, chars = 6, tone = 'ink', hint }: { label: ReactNode; value: string; chars?: number; tone?: 'ink' | 'amber' | 'clay' | 'data' | 'soft'; hint?: string }) {
-  const color = tone === 'amber' ? 'text-amber' : tone === 'clay' ? 'text-clay' : tone === 'data' ? 'text-data' : tone === 'soft' ? 'text-ink-soft' : 'text-ink';
+  const color = tone === 'amber' ? 'text-amber' : tone === 'clay' ? 'text-clay-text' : tone === 'data' ? 'text-data' : tone === 'soft' ? 'text-ink-soft' : 'text-ink';
   return (
     <div className="flex items-baseline justify-between gap-2 text-xs" title={hint}>
       <span className="truncate text-ink-soft">{label}</span>

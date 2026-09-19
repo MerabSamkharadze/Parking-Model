@@ -14,6 +14,7 @@ export function VersionPicker() {
   const config = useSimStore((s) => s.config);
   const setPreset = useSimStore((s) => s.setPreset);
   const versions = useSimStore((s) => s.versions);
+  const activeVersionId = useSimStore((s) => s.activeVersionId);
   const saveCurrent = useSimStore((s) => s.saveCurrent);
   const deleteSaved = useSimStore((s) => s.deleteSaved);
   const loadSaved = useSimStore((s) => s.loadSaved);
@@ -24,7 +25,9 @@ export function VersionPicker() {
   const [copied, setCopied] = useState(false);
   const [comparing, setComparing] = useState(false);
   const custom = isCustom(config);
-  const activeSaved = versions.find((v) => v.config === config)?.id ?? null;
+  // the store says which saved row the running setup is (save / load set it,
+  // any change clears it); a preset row is active only when no saved row is
+  const activeSaved = activeVersionId !== null && versions.some((v) => v.id === activeVersionId) ? activeVersionId : null;
   const rowClass = (active: boolean) =>
     `flex w-full items-baseline gap-2 border-l-2 px-2 py-1 text-left text-xs transition-colors ${
       active ? 'border-amber text-ink' : 'border-transparent text-ink-soft hover:border-line hover:text-ink'
@@ -47,7 +50,7 @@ export function VersionPicker() {
       <div className="flex flex-col" aria-label="Versions">
         {PRESET_IDS.map((id) => {
           const p = PRESETS[id];
-          const active = !custom && config.id === id;
+          const active = activeSaved === null && !custom && config.id === id;
           return (
             <button key={id} type="button" aria-pressed={active} className={rowClass(active)} onClick={() => setPreset(id)}>
               <span className="w-4 font-mono">{id}</span>
@@ -60,11 +63,15 @@ export function VersionPicker() {
           return (
             <div key={v.id} className="flex items-stretch">
               <button type="button" aria-pressed={active} className={`${rowClass(active)} min-w-0 flex-1`} onClick={() => loadSaved(v.id)}>
-                <span className="w-4 font-mono">·</span>
-                <span className="truncate">{v.label}</span>
-                <span className="ml-auto font-mono text-[10px] text-ink-soft">from {v.config.derivedFrom ?? v.config.id}</span>
+                <span className="w-4 shrink-0 font-mono">·</span>
+                <span className="min-w-0 truncate" title={v.label}>
+                  {v.label}
+                </span>
+                <span className="ml-auto shrink-0 text-[10px] whitespace-nowrap text-ink-soft">
+                  from <span className="font-mono">{v.config.derivedFrom ?? v.config.id}</span>
+                </span>
               </button>
-              <button type="button" aria-label={`Delete ${v.label}`} className="w-6 text-xs text-ink-soft hover:text-clay" onClick={() => deleteSaved(v.id)}>
+              <button type="button" aria-label={`Delete ${v.label}`} className="w-6 shrink-0 text-xs text-ink-soft hover:text-clay-text" onClick={() => deleteSaved(v.id)}>
                 ×
               </button>
             </div>
@@ -98,7 +105,7 @@ export function VersionPicker() {
               aria-label="Version name"
               className="w-32 rounded-sm border border-line bg-void px-1.5 py-0.5 text-xs text-ink outline-none placeholder:text-ink-soft focus:border-amber"
             />
-            <Chip type="submit" active>
+            <Chip type="submit" primary>
               Save
             </Chip>
             <Chip onClick={() => setSaving(false)}>Cancel</Chip>

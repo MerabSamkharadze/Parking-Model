@@ -2,9 +2,12 @@
 
 // SPEC §8 block 3: levels, lifts, bays, shuttles per level, slot mix. Edits
 // are a draft; the "Restart needed" badge appears as soon as it differs from
-// the running config, and "Restart" applies it as a custom version.
+// the running config, and "Restart" applies it as a custom version. The
+// draft survives hot changes elsewhere (a strategy edit replaces the config
+// object but not the facility): it resets on a restart or when the facility
+// fields themselves change.
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Chip } from '@/components/ui/Chip';
 import { NumberField } from '@/components/ui/NumberField';
@@ -52,10 +55,19 @@ function patchOf(d: Draft): ConfigPatch {
 
 export function FacilityForm() {
   const config = useSimStore((s) => s.config);
+  const epoch = useSimStore((s) => s.epoch);
   const applyFacility = useSimStore((s) => s.applyFacility);
-  const [draft, setDraft] = useState<Draft>(() => draftOf(config));
-  useEffect(() => setDraft(draftOf(config)), [config]);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(draftOf(config));
+  const base = draftOf(config);
+  const baseKey = `${epoch}:${JSON.stringify(base)}`;
+  const [draft, setDraft] = useState<Draft>(base);
+  const [seen, setSeen] = useState(baseKey);
+  if (seen !== baseKey) {
+    // adjust state during render (React's pattern for derived resets): no
+    // extra effect pass, and the stale draft is never painted
+    setSeen(baseKey);
+    setDraft(base);
+  }
+  const dirty = JSON.stringify(draft) !== JSON.stringify(base);
   const preview = deriveConfig(config, patchOf(draft));
   const warnings = layout(preview).warnings;
   const set = (k: keyof Draft) => (v: number) => setDraft((d) => ({ ...d, [k]: v }));
@@ -63,7 +75,8 @@ export function FacilityForm() {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+      {/* the right column is wider: it holds the longest label (Shuttles/level) */}
+      <div className="grid grid-cols-[minmax(0,4fr)_minmax(0,5fr)] gap-x-3 gap-y-1.5">
         <NumberField label="Levels" value={draft.levels} min={L.levels.min} max={L.levels.max} onChange={set('levels')} />
         <NumberField label="Columns" value={draft.cols} min={L.cols.min} max={L.cols.max} onChange={set('cols')} />
         <NumberField label="Lifts" value={draft.lifts} min={L.lifts.min} max={L.lifts.max} onChange={set('lifts')} />
@@ -84,13 +97,13 @@ export function FacilityForm() {
               Discard
             </Chip>
           )}
-          <Chip active={dirty} disabled={!dirty} onClick={() => applyFacility(patchOf(draft))}>
+          <Chip primary={dirty} disabled={!dirty} onClick={() => applyFacility(patchOf(draft))}>
             Restart
           </Chip>
         </span>
       </div>
       {warnings.map((w) => (
-        <p key={w} className="text-xs text-clay">
+        <p key={w} className="text-xs text-clay-text">
           {w}
         </p>
       ))}

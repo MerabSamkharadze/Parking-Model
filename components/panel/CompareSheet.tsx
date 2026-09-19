@@ -5,10 +5,11 @@
 // scene keeps showing the active version.
 
 import { useState } from 'react';
+import { Badge } from '@/components/ui/Badge';
 import { Chip } from '@/components/ui/Chip';
 import { COMPARE_MAX, COMPARE_METRICS, COMPARE_MIN, bestOf } from '@/lib/compare';
 import { PRESETS, PRESET_IDS, isCustom } from '@/lib/presets';
-import { useSimStore } from '@/store/useSimStore';
+import { compareStaleNote, useSimStore } from '@/store/useSimStore';
 
 export function CompareSheet({ onClose }: { onClose: () => void }) {
   const config = useSimStore((s) => s.config);
@@ -28,6 +29,7 @@ export function CompareSheet({ onClose }: { onClose: () => void }) {
   const toggle = (id: string) =>
     setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : p.length >= COMPARE_MAX ? [...p.slice(1), id] : [...p, id]));
   const canRun = picked.length >= COMPARE_MIN && !compare.running;
+  const stale = compare.rows.length > 0 ? compareStaleNote(compare.setup, { demand, seed, config }) : null;
 
   return (
     <div className="flex flex-col gap-2 border-t border-line pt-2">
@@ -39,10 +41,10 @@ export function CompareSheet({ onClose }: { onClose: () => void }) {
         ))}
       </div>
       <p className="text-xs text-ink-soft">
-        Same day for all: {demand.name}, {demand.residents} residents, seed <span className="font-mono">{seed}</span>, 24 h headless.
+        Same day for all: {demand.name}, <span className="font-mono">{demand.residents}</span> residents, seed <span className="font-mono">{seed}</span>, <span className="font-mono">24</span> h headless.
       </p>
       <div className="flex items-center gap-2">
-        <Chip active={canRun} disabled={!canRun} onClick={() => runCompare(picked)}>
+        <Chip primary={canRun} disabled={!canRun} onClick={() => runCompare(picked)}>
           {compare.running ? 'Running…' : 'Run compare'}
         </Chip>
         {compare.elapsedMs !== null && (
@@ -60,14 +62,22 @@ export function CompareSheet({ onClose }: { onClose: () => void }) {
           Close
         </Chip>
       </div>
-      {compare.error && <p className="text-xs text-clay">{compare.error}</p>}
+      {compare.error && <p className="text-xs text-clay-text">{compare.error}</p>}
+      {stale && (
+        <p className="text-xs">
+          <Badge tone="amber">{stale}</Badge>
+        </p>
+      )}
       {compare.rows.length > 0 && (
-        <table className="w-full border-collapse text-xs" aria-label="Compare results">
+        // fixed layout: the metric column takes 40 %, the versions share the
+        // rest, and a long saved-version label truncates instead of squeezing
+        // the values together
+        <table className="w-full table-fixed border-collapse text-xs" aria-label="Compare results">
           <thead>
             <tr className="text-ink-soft">
-              <th className="pb-1 text-left font-normal">metric</th>
+              <th className="w-[40%] pb-1 text-left font-normal">metric</th>
               {compare.rows.map((r) => (
-                <th key={r.id} className="pb-1 text-right font-normal">
+                <th key={r.id} className="truncate pb-1 pl-2 text-right font-normal" title={r.label}>
                   {r.label.split(' · ')[0]}
                 </th>
               ))}
@@ -75,9 +85,9 @@ export function CompareSheet({ onClose }: { onClose: () => void }) {
           </thead>
           <tbody>
             <tr className="text-ink-soft">
-              <td>Slots</td>
+              <td className="truncate">Slots</td>
               {compare.rows.map((r) => (
-                <td key={r.id} className="text-right font-mono">
+                <td key={r.id} className="pl-2 text-right font-mono">
                   {r.slots}
                 </td>
               ))}
@@ -86,9 +96,11 @@ export function CompareSheet({ onClose }: { onClose: () => void }) {
               const best = bestOf(compare.rows, m);
               return (
                 <tr key={m.key}>
-                  <td className="text-ink-soft">{m.label}</td>
+                  <td className="truncate text-ink-soft" title={m.label}>
+                    {m.label}
+                  </td>
                   {compare.rows.map((r, i) => (
-                    <td key={r.id} className={`text-right font-mono ${i === best ? 'text-amber' : 'text-ink'}`}>
+                    <td key={r.id} className={`pl-2 text-right font-mono ${i === best ? 'text-amber' : 'text-ink'}`}>
                       {m.format(m.value(r.summary))}
                     </td>
                   ))}

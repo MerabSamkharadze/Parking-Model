@@ -35,16 +35,19 @@ export function FailurePanel() {
       </div>
       <div className="flex items-center gap-2 text-xs text-ink-soft">
         {cfg.spareShuttle ? (
-          <span>
-            Spare shuttle: {f.spareUsed ? <Badge tone="lime">used</Badge> : <Badge>ready · replaces the first failed shuttle after {cfg.spareSwapMinutes} min</Badge>}
-          </span>
+          <span>Spare shuttle: {f.spareUsed ? <Badge tone="lime">used</Badge> : <Badge>ready</Badge>}</span>
         ) : (
           <span>No spare shuttle in this version.</span>
         )}
-        <Chip className="ml-auto" active={anything} disabled={!anything} onClick={recoverAll}>
+        <Chip className="ml-auto shrink-0 whitespace-nowrap" primary={anything} disabled={!anything} onClick={recoverAll}>
           Recover all
         </Chip>
       </div>
+      {cfg.spareShuttle && !f.spareUsed && (
+        <p className="text-xs text-ink-soft">
+          Replaces the first failed shuttle after <span className="font-mono">{cfg.spareSwapMinutes}</span> min.
+        </p>
+      )}
     </div>
   );
 }

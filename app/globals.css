@@ -9,7 +9,8 @@
   --slab-edge: #3A4A53;   /* drawing line */
   --amber: #F2A615;       /* mechanics: lift, shuttle */
   --data: #3AA2CC;        /* occupied slot, index */
-  --clay: #D4573A;        /* called, error */
+  --clay: #D4573A;        /* called, error — fills, borders, the 3D palette */
+  --clay-text: #E0684A;   /* clay as text on --panel / --void: 5.2:1 (WCAG AA needs 4.5) */
   --lime: #A9C23F;        /* ev slot */
   --ink: #E8EBEA;
   --ink-soft: #8C9A9F;
@@ -34,6 +35,7 @@
   --color-amber: var(--amber);
   --color-data: var(--data);
   --color-clay: var(--clay);
+  --color-clay-text: var(--clay-text);
   --color-lime: var(--lime);
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
@@ -76,6 +78,50 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 
+/* Range slider: a 4 px track (the thin line SPEC §7 asks for) inside a 24 px
+   input, so the hit area meets the touch-target size (DECISIONS S31). The
+   filled part is a two-tone hard stop, not a wash. */
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 24px;
+  margin: 0;
+  background: transparent;
+  --slider-fill: 0%;
+}
+.slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--amber) var(--slider-fill), var(--line) var(--slider-fill));
+}
+.slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+}
+.slider::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--amber);
+}
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px; /* centre on the 4 px track */
+  border: 0;
+  border-radius: 50%;
+  background: var(--amber);
+}
+.slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
 /* ---------------------------------------------------------------------------
    Page shell — SPEC §7 layout
    header / viewport / timeline on the left, panel rail on the right.
@@ -96,7 +142,11 @@ h3 {
 .shell-timeline { grid-area: timeline; }
 .shell-panel    { grid-area: panel; }
 
-/* < 1024 px: panel stacks below as a sheet, viewport 55vh, page scrolls. */
+/* < 1024 px: panel stacks below as a sheet, viewport 55vh, page scrolls.
+   The sheet lays its blocks out in columns of rail width (340 px and up),
+   so a label and its control never sit a screen apart; a 1 px --line grid
+   (bottom borders from the block, right borders drawn here) keeps the
+   concrete-edge look of the rail. */
 @media (max-width: 1023px) {
   .shell {
     height: auto;
@@ -108,5 +158,14 @@ h3 {
       "viewport"
       "timeline"
       "panel";
+  }
+  .shell-panel {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    align-content: start;
+    overflow: visible;
+  }
+  .shell-panel > section {
+    box-shadow: 1px 0 0 var(--line); /* ink overflow: no width, no scrollbar */
   }
 }
