@@ -1,54 +1,25 @@
 'use client';
 
 // SPEC §8 block 8: virtualised index of every car in the system — ticket,
-// plate, slot key (or the job stage while moving), zone, dwell. Search by
-// plate or ticket; a row click selects the car and flies the camera to its
-// slot; "Retrieve" calls it. Hand-rolled windowing (DECISIONS S6): fixed row
-// height, only the visible rows (+ overscan) are mounted.
+// plate, slot key (or the job stage while moving; clay while a called car is
+// still in its slot), zone, dwell. Search by plate or ticket; a row click
+// selects the car and flies the camera to its slot; "Retrieve" calls it.
+// Hand-rolled windowing (DECISIONS S6): fixed row height, only the visible
+// rows (+ overscan) are mounted. The dwell column swaps rather than rolls:
+// 18 mounted rows rolling their seconds twice a second is the busy motion
+// SPEC §7 rules out, and the value is a running clock, not a stat.
 
 import { useMemo, useRef, useState } from 'react';
 import { Chip } from '@/components/ui/Chip';
 import { durationOf } from '@/lib/format';
-import { hotLevels, parseSlotKey } from '@/lib/geometry';
-import type { Job, SimSnapshot, Vehicle } from '@/lib/sim/types';
+import { hotLevels } from '@/lib/geometry';
 import { usePanelSnapshot, useSimStore } from '@/store/useSimStore';
 import { useUiStore } from '@/store/useUiStore';
+import { rowsOf, type IndexRow } from './indexRows';
 
 const ROW_H = 24;
 const VIEW_H = 240;
 const OVERSCAN = 4;
-
-interface Row {
-  id: string;
-  plate: string;
-  where: string; // slot key or stage
-  moving: boolean;
-  zone: string;
-  dwell: number;
-  slotKey: string | null;
-}
-
-function rowsOf(snapshot: SimSnapshot, hot: number): Row[] {
-  const stageOf = new Map<string, Job['stage']>();
-  for (const j of snapshot.jobs) stageOf.set(j.vehicleId, j.stage);
-  const out: Row[] = [];
-  for (const v of Object.values(snapshot.vehicles) as Vehicle[]) {
-    if (v.state !== 'parked' && v.state !== 'in_system' && v.state !== 'arriving') continue;
-    const stage = stageOf.get(v.id);
-    const parked = v.state === 'parked' && v.slotKey !== null;
-    out.push({
-      id: v.id,
-      plate: v.plate,
-      where: parked ? v.slotKey! : (stage ?? v.state),
-      moving: !parked,
-      zone: v.slotKey ? (parseSlotKey(v.slotKey).level < hot ? 'hot' : 'cold') : '—',
-      dwell: Math.max(0, snapshot.t - v.arrivedAt),
-      slotKey: parked ? v.slotKey : null,
-    });
-  }
-  out.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
-  return out;
-}
 
 export function IndexTable() {
   const snapshot = usePanelSnapshot();
@@ -71,7 +42,7 @@ export function IndexTable() {
   const last = Math.min(visible.length, Math.ceil((scrollTop + VIEW_H) / ROW_H) + OVERSCAN);
   const selected = selectedVehicleId ? rows.find((r) => r.id === selectedVehicleId) : undefined;
 
-  const pick = (r: Row) => {
+  const pick = (r: IndexRow) => {
     selectVehicle(r.id === selectedVehicleId ? null : r.id);
     if (r.id === selectedVehicleId) selectSlot(null);
     else if (r.slotKey) flyTo(r.slotKey);
@@ -93,12 +64,22 @@ export function IndexTable() {
           aria-label="Search plate or ticket"
           className="min-w-0 flex-1 rounded-sm border border-line bg-void px-1.5 py-0.5 font-mono text-xs text-ink outline-none placeholder:text-ink-soft focus:border-amber"
         />
-        <Chip disabled={!selected || selected.moving} onClick={() => selected && callVehicle(selected.id)} title={selected ? `Retrieve ${selected.id}` : 'Select a parked car first'}>
+        <Chip
+          disabled={!selected || selected.moving}
+          onClick={() => selected && callVehicle(selected.id)}
+          title={!selected ? 'Select a parked car first' : selected.called ? `${selected.id} is already called` : selected.moving ? `${selected.id} is moving` : `Retrieve ${selected.id}`}
+        >
           Retrieve
         </Chip>
       </div>
-      <p className="font-mono text-[11px] text-ink-soft">
-        {rows.length} cars · {parked} parked · {rows.length - parked} moving{q ? ` · ${visible.length} match` : ''}
+      <p className="text-[11px] text-ink-soft">
+        <span className="font-mono">{rows.length}</span> cars · <span className="font-mono">{parked}</span> parked · <span className="font-mono">{rows.length - parked}</span> moving
+        {q && (
+          <>
+            {' '}
+            · <span className="font-mono">{visible.length}</span> match
+          </>
+        )}
       </p>
       <div className="grid grid-cols-[3.5rem_5rem_1fr_2.5rem_3.5rem] gap-x-2 border-b border-line pb-1 text-[11px] text-ink-soft">
         <span>ticket</span>
@@ -125,8 +106,8 @@ export function IndexTable() {
               >
                 <span>{r.id}</span>
                 <span>{r.plate}</span>
-                <span className={r.moving ? 'text-amber' : 'text-data'}>{r.where}</span>
-                <span className="text-ink-soft">{r.zone}</span>
+                <span className={r.called ? 'text-clay-text' : r.moving ? 'text-amber' : 'text-data'}>{r.where}</span>
+                <span className="font-sans text-ink-soft">{r.zone}</span>
                 <span className="text-right text-ink-soft">{durationOf(r.dwell)}</span>
               </button>
             );

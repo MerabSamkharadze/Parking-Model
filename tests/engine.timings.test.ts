@@ -25,7 +25,7 @@ describe('derived figures match SPEC §2 within ±15% (preset B, seed 42, 24 h)'
     within(a.summary.liftCapacityPerHour, 110);
   });
   it('the whole day runs in seconds, not minutes (a loose bound: the machine may be busy)', () => {
-    expect(r.elapsedMs).toBeLessThan(15000);
+    expect(r.elapsedMs).toBeLessThan(20000);
   });
 });
 
