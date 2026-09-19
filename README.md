@@ -17,6 +17,7 @@ DPR=2 node scripts/screenshot.mjs http://localhost:3000/ scripts/shots/presets.j
 DPR=2 node scripts/screenshot.mjs http://localhost:3000/ scripts/shots/stages.js out/    # a car at every stage
 DPR=2 node scripts/screenshot.mjs http://localhost:3000/ scripts/shots/day60x.js out/    # 24 h at 60× (~24 min)
 DPR=2 node scripts/screenshot.mjs http://localhost:3000/ scripts/shots/panel.js out/     # panel blocks + DOM interactions
+DPR=2 node scripts/screenshot.mjs http://localhost:3000/ scripts/shots/versions.js out/  # compare timing, save, share
 ```
 
 Progress and measured numbers: [`STATUS.md`](./STATUS.md). How the spec's open points were

@@ -10,11 +10,14 @@
 // `history` (sparklines, timeline) so it never re-renders at snapshot rate.
 
 import { create } from 'zustand';
+import { COMPARE_HOURS, COMPARE_MAX, COMPARE_MIN, rowOf, type CompareCandidate, type CompareRow } from '@/lib/compare';
 import { History } from '@/lib/history';
 import { PRESETS, deriveConfig, presetById, type ConfigPatch } from '@/lib/presets';
+import { SHARE_PARAM, decodeSetup, deleteVersion, loadVersions, saveVersion, shareUrl, type SavedVersion, type Setup, type StorageLike } from '@/lib/share';
 import { PROFILES, profileByName } from '@/lib/sim/demand';
 import { Engine, TICK } from '@/lib/sim/engine';
 import type { DemandProfile, FacilityConfig, Resource, SimSnapshot } from '@/lib/sim/types';
+import type { BenchRequest, BenchResponse } from '@/workers/bench.worker';
 
 export const SPEEDS = [1, 4, 16, 60] as const;
 export type Speed = (typeof SPEEDS)[number];
@@ -68,6 +71,33 @@ interface SimState {
   // --- commands (SPEC §8.5) ---
   addVehicle: (tenant?: 'visitor' | 'resident') => void;
   callVehicle: (vehicleId?: string) => void;
+  // --- saved versions, share, compare (SPEC §5, M5) ---
+  versions: SavedVersion[];
+  /** Reads `?v=` and localStorage once, before the first engine (client only). */
+  boot: () => void;
+  saveCurrent: (label: string) => void;
+  deleteSaved: (id: string) => void;
+  loadSaved: (id: string) => void;
+  /** The share URL for the running setup; also written to the address bar. */
+  shareLink: () => string;
+  compare: CompareState;
+  runCompare: (ids: string[]) => void;
+  clearCompare: () => void;
+}
+
+export interface CompareState {
+  running: boolean;
+  rows: CompareRow[];
+  elapsedMs: number | null;
+  error: string | null;
+}
+
+function storage(): StorageLike | null {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage;
+  } catch {
+    return null;
+  }
 }
 
 function indexResources(snapshot: SimSnapshot): ReadonlyMap<string, Resource> {
@@ -189,6 +219,79 @@ export const useSimStore = create<SimState>((set, get) => {
       set((s) => ({ demand: { ...s.demand, residents: Math.max(0, Math.round(residents)) } }));
       create_();
     },
+    versions: [],
+    boot: () => {
+      if (typeof window === 'undefined') return;
+      const shared = decodeSetup(new URLSearchParams(window.location.search).get(SHARE_PARAM));
+      const versions = loadVersions(storage());
+      if (shared) {
+        set({ config: shared.config, demand: { ...PROFILES[shared.demandName], residents: shared.residents }, seed: shared.seed, versions });
+      } else set({ versions });
+    },
+    saveCurrent: (label) => {
+      const { config, demand, seed, versions } = get();
+      const setup: Setup = { config, demandName: demand.name, residents: demand.residents, seed };
+      set({ versions: saveVersion(storage(), versions, setup, label) });
+    },
+    deleteSaved: (id) => set((s) => ({ versions: deleteVersion(storage(), s.versions, id) })),
+    loadSaved: (id) => {
+      const v = get().versions.find((x) => x.id === id);
+      if (!v) return;
+      set({ config: v.config, demand: { ...PROFILES[v.demandName], residents: v.residents }, seed: v.seed });
+      create_();
+    },
+    shareLink: () => {
+      const { config, demand, seed } = get();
+      const url = shareUrl({ config, demandName: demand.name, residents: demand.residents, seed }, window.location.href);
+      try {
+        window.history.replaceState(null, '', url);
+      } catch {
+        /* sandboxed */
+      }
+      return url;
+    },
+    compare: { running: false, rows: [], elapsedMs: null, error: null },
+    runCompare: (ids) => {
+      const { config, demand, seed, versions, compare } = get();
+      if (compare.running) return;
+      const candidates: CompareCandidate[] = [];
+      for (const id of ids.slice(0, COMPARE_MAX)) {
+        if (id === 'current') candidates.push({ id, label: config.derivedFrom ? `Custom · from ${config.derivedFrom}` : `${config.id} · ${config.label}`, config });
+        else if (presetById(id)) candidates.push({ id, label: `${id} · ${presetById(id)!.label}`, config: presetById(id)! });
+        else {
+          const v = versions.find((x) => x.id === id);
+          if (v) candidates.push({ id, label: v.label, config: v.config });
+        }
+      }
+      if (candidates.length < COMPARE_MIN) return;
+      set({ compare: { running: true, rows: [], elapsedMs: null, error: null } });
+      const started = performance.now();
+      const results = new Map<string, CompareRow>();
+      const workers: Worker[] = [];
+      const finish = (error: string | null) => {
+        for (const w of workers) w.terminate();
+        const rows = candidates.map((c) => results.get(c.id)).filter((r): r is CompareRow => r !== undefined);
+        set({ compare: { running: false, rows, elapsedMs: Math.round(performance.now() - started), error } });
+      };
+      for (const c of candidates) {
+        let worker: Worker;
+        try {
+          worker = new Worker(new URL('../workers/bench.worker.ts', import.meta.url));
+        } catch (e) {
+          finish(`workers unavailable: ${String(e)}`);
+          return;
+        }
+        workers.push(worker);
+        worker.onmessage = (e: MessageEvent<BenchResponse>) => {
+          results.set(e.data.id, rowOf(c, e.data.result));
+          if (results.size === candidates.length) finish(null);
+        };
+        worker.onerror = (e) => finish(e.message || 'worker error');
+        const request: BenchRequest = { id: c.id, config: c.config, demandName: demand.name, residents: demand.residents, seed, hours: COMPARE_HOURS };
+        worker.postMessage(request);
+      }
+    },
+    clearCompare: () => set({ compare: { running: false, rows: [], elapsedMs: null, error: null } }),
     addVehicle: (tenant = 'visitor') => {
       const { engine } = get();
       if (!engine) return;

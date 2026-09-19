@@ -10,9 +10,10 @@ Updated after each milestone. Gates: `pnpm lint`, `pnpm typecheck`, `pnpm test`,
 | M1 sim engine | ✅ done | `7f6452a` | pure TS engine, 46 tests, `pnpm bench`; §2 figures reproduced (below) |
 | M2 static 3D | ✅ done | `74dcca7` | geometry from config, InstancedMesh slots, 4 camera presets, level isolation, flyTo |
 | M3 engine ↔ scene | ✅ done | `00c21ec` | 20 Hz snapshot bridge, render clock, VehiclePool, lift/shuttle/car animation at every stage, run control |
-| M4 control panel | ✅ done | — | §8 blocks 1–9, virtualised index + flyTo, event log, sparklines, timeline strip, custom versions |
-| M5 versions | ⬜ next | | saved custom versions (localStorage), share URL, compare mode (worker) |
-| M6 failure & polish | ⬜ | | failure panel, degraded UI, keyboard shortcuts, reduced motion, README, Lighthouse ≥ 95 |
+| M4 control panel | ✅ done | `096212c` | §8 blocks 1–9, virtualised index + flyTo, event log, sparklines, timeline strip, custom versions |
+| M5 versions | ✅ done | — | saved versions (localStorage, max 12), share `?v=` links, compare mode in Web Workers |
+| M6 failure & polish | ⬜ next | | failure panel, degraded UI, keyboard shortcuts, reduced motion, README screenshots, Lighthouse ≥ 95 |
+| M7 presentation (user request) | ⬜ | | real CC0 car models, detailed structure and surface context, guided story mode with captions and follow-camera |
 
 ## M1 — engine vs SPEC §2 (preset B, weekday demand, seed 42, 24 h)
 
@@ -185,6 +186,27 @@ CONFIG_LIMITS`, `lib/format.ts`, and the live `TimelineStrip` (throughput + queu
 - A restart must clear UI selections (slot / vehicle) or the index points at a car that
   no longer exists.
 
+## M5 — versions, share, compare
+
+- `lib/share.ts` — `encodeSetup / decodeSetup / shareUrl` (base64url JSON, preset short
+  form, validated on the way in) and `loadVersions / saveVersion / deleteVersion` over an
+  injected storage (localStorage in the app, memory in tests).
+- `lib/compare.ts` + `workers/bench.worker.ts` — candidates, metric table definition,
+  one worker per version running `runBench` for 24 h.
+- Store: `boot()` (reads `?v=` and localStorage before the first engine), `saveCurrent`,
+  `deleteSaved`, `loadSaved`, `shareLink`, `runCompare`, `compare` state.
+- Panel: the Version block gained saved rows (load / ×), Save as…, Share (copies + shows
+  the link), Compare → `CompareSheet` (pick 2–3, run, side-by-side table, best in amber).
+
+### M5 DoD, measured (headless Chrome, `scripts/shots/versions.js`)
+
+| check | result |
+|---|---|
+| 3 versions compared in < 3 s | Custom-from-B + B + C, 24 h each: **1 694 ms** wall (workers in parallel: 788 / 786 / 1 638 ms) |
+| opening a share URL restores the exact config | a generated link (custom from D: 1 lift, nearest, EV 30 %, stress, 110 residents, seed 9) boots to exactly that setup; `tests/share.test.ts` also proves two engines built from a setup and its decoded link produce identical metrics |
+| saved versions persist | "Save as…" → localStorage entry (691 bytes), listed with its origin; max 12, same label replaces, corrupt entries ignored |
+| gates | lint, typecheck, 61 tests, build green |
+
 ## What the engine exposes (for M2–M6)
 
 - `new Engine({ config, demand, seed, devChecks })`, `step()`, `run(seconds)`, `snapshot()`,
@@ -201,6 +223,6 @@ CONFIG_LIMITS`, `lib/format.ts`, and the live `TimelineStrip` (throughput + queu
 
 ## Left to do
 
-Everything from M5 on (table above). Open items that need the user's eye, not code:
+M6 (polish) and M7 (presentation, see the user's vision in DECISIONS U1) — table above. Open items that need the user's eye, not code:
 the header name "AVP Simulator", header/timeline heights (48/96 px), and any decision in
 `DECISIONS.md` they want changed.

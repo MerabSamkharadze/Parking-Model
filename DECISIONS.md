@@ -236,5 +236,17 @@ will be adjusted.
   ops (SHUFFLE, DEFRAG, FAIL, RECOVER, SPARE). Colours by kind (clay for REJECT/FAIL,
   amber for LOCK WAIT/SPARE, data for SELECT, lime for RECOVER). Auto-scroll sticks to
   the bottom unless the reader scrolled up; timestamps are HH:MM:SS of the sim day.
+- **S29 — share links.** `?v=` carries base64url JSON of `{config, demand profile,
+  residents, seed}` (an untouched preset shares as just its id, `?v=C`). Decoding
+  validates every numeric field and the allocator before trusting it; a shared preset id
+  maps back to the built-in object. "Share" copies the link and writes it to the address
+  bar, so the URL always reproduces what is on screen. Saved versions live in
+  localStorage (`avp.versions.v1`, newest first, max 12, same label replaces), every
+  access in try/catch — a blocked storage keeps working in memory for the session.
+- **S30 — compare mode runs the same day for every version**: the current demand
+  profile, residents and seed, 24 h, one Web Worker per version in parallel (2–3), so
+  the wall time is the slowest version, not the sum. The best value per metric is amber;
+  ties highlight nothing. The candidates are the unsaved custom setup, A–D and the saved
+  versions; the scene keeps showing the active one.
 - **M0** header name "AVP Simulator"; header 48 px, timeline 96 px; English UI; stacked
   layout under 1024 px; TypeScript 5.9 and Next 15.5 pinned.

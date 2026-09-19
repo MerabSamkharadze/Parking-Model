@@ -75,12 +75,16 @@ function Overlay() {
 export function ViewportFrame() {
   const engine = useSimStore((s) => s.engine);
   const init = useSimStore((s) => s.init);
+  const boot = useSimStore((s) => s.boot);
   const epoch = useSimStore((s) => s.epoch);
   const selectSlot = useUiStore((s) => s.selectSlot);
   const selectVehicle = useUiStore((s) => s.selectVehicle);
   useEffect(() => {
-    if (!engine) init();
-  }, [engine, init]);
+    if (!engine) {
+      boot(); // ?v= share link and saved versions, before the first engine
+      init();
+    }
+  }, [engine, init, boot]);
   // a new engine has new cars: drop the old selection
   useEffect(() => {
     selectSlot(null);
