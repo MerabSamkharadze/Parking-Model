@@ -9,6 +9,15 @@ import type { FacilityConfig, SlotId } from './sim/types.ts';
 
 /** Shaft length along the corridor axis (car + clearance). */
 export const SHAFT_LENGTH = 5.8;
+/** Level slab thickness. SPEC §2's `levelHeight` is the clear height under the
+ *  slab ("nobody goes inside"), so the floor-to-floor pitch is `levelHeight + SLAB_THICKNESS`
+ *  (DECISIONS S39; supersedes S3's reading of it as the pitch). */
+export const SLAB_THICKNESS = 0.22;
+/** Gap between a parked car's rear and the slot's back edge (DECISIONS S40). */
+export const PARK_BACK_MARGIN = 0.15;
+/** Shuttle length along the corridor and the clearance it keeps from a shaft's edge. */
+export const SHUTTLE_LENGTH = 4.6;
+const DOCK_GAP = 0.25;
 const BAY_PITCH_Z = 3.4;
 const BAY_PITCH_X = 6;
 const BAYS_PER_ROW = 5;
@@ -171,18 +180,54 @@ export function rowZ(cfg: FacilityConfig, row: 0 | 1): number {
   return row === 0 ? -d : d;
 }
 
-/** Floor Y of a 0-based level: L1 (index 0) floor at −levelHeight. */
+/** Floor-to-floor pitch: the clear level height plus the slab above it. */
+export function levelPitch(cfg: FacilityConfig): number {
+  return cfg.levelHeight + SLAB_THICKNESS;
+}
+
+/** Floor Y of a 0-based level: L1 (index 0) floor one pitch below the surface. */
 export function levelY(cfg: FacilityConfig, level: number): number {
-  return -(level + 1) * cfg.levelHeight;
+  return -(level + 1) * levelPitch(cfg);
 }
 
 /** Y of a lift platform at a level number (0 = surface, k = level k). */
 export function liftY(cfg: FacilityConfig, levelNumber: number): number {
-  return -levelNumber * cfg.levelHeight;
+  return -levelNumber * levelPitch(cfg);
 }
 
 export function slotPosition(cfg: FacilityConfig, id: SlotId): { x: number; y: number; z: number } {
   return { x: slotX(cfg, id.col), y: levelY(cfg, id.level), z: rowZ(cfg, id.row) };
+}
+
+/** Z of a parked car's centre: pushed to the back of its slot (rear at the slot's
+ *  outer edge minus PARK_BACK_MARGIN) so the slot mouth stays clear for the
+ *  quarter turn of a neighbour (DECISIONS S40). `length` is the drawn car's length. */
+export function parkedZ(cfg: FacilityConfig, row: 0 | 1, length: number): number {
+  const outer = cfg.corridorWidth / 2 + cfg.slotDepth;
+  const centre = Math.max(cfg.corridorWidth / 2 + length / 2, outer - PARK_BACK_MARGIN - length / 2);
+  return row === 0 ? -centre : centre;
+}
+
+/** Where a zone's shuttle stops to exchange with a shaft: just outside the shaft
+ *  footprint on the field side, so the platform never passes through it and the
+ *  shuttle's telescopic comb reaches the car (DECISIONS S41). */
+export function shuttleDockX(cfg: FacilityConfig, shaft: Shaft): number {
+  const l = layout(cfg);
+  const zoneCentre = l.zoneStartX[shaft.zone] + (l.colsPerZone[shaft.zone] * cfg.pitch) / 2;
+  const side = zoneCentre >= shaft.x ? 1 : -1;
+  return shaft.x + side * (SHAFT_LENGTH / 2 + SHUTTLE_LENGTH / 2 + DOCK_GAP);
+}
+
+/** The engine drives a shuttle to the shaft centre; the scene draws it at the
+ *  dock instead (monotonic clamp, so motion stays continuous). */
+export function drawnShuttleX(cfg: FacilityConfig, zone: number, x: number): number {
+  for (const s of layout(cfg).shafts) {
+    if (s.zone !== zone) continue;
+    const dock = shuttleDockX(cfg, s);
+    const side = dock >= s.x ? 1 : -1;
+    if (side > 0 ? x < dock : x > dock) return dock;
+  }
+  return x;
 }
 
 /** Shuttle travel distance between a shaft's exchange position and a column. */
@@ -233,7 +278,7 @@ export function bounds(cfg: FacilityConfig): { minX: number; maxX: number; minY:
   return {
     minX: l.minX - bayReach,
     maxX: l.maxX + bayReach,
-    minY: -cfg.levels * cfg.levelHeight,
+    minY: -cfg.levels * levelPitch(cfg),
     maxY: 0,
     minZ: -depth,
     maxZ: depth,

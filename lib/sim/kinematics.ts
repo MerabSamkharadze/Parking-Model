@@ -22,11 +22,28 @@ export function shuttleTravelTime(t: Timings, distance: number): number {
   return d / v + v / a;
 }
 
-/** Position of a resource at time `now` (linear inside the move). */
+/** Position of a resource at time `now`: a trapezoidal speed profile with
+ *  `move.ramp` seconds of acceleration and braking (linear when ramp is 0).
+ *  Symmetric, so the midpoint is reached at half time. */
 export function positionAt(move: ResourceMove | null, restPos: number, now: number): number {
   if (!move) return restPos;
   if (now >= move.end) return move.to;
   if (now <= move.start) return move.from;
-  const k = (now - move.start) / (move.end - move.start);
-  return move.from + (move.to - move.from) * k;
+  const T = move.end - move.start;
+  const t = now - move.start;
+  const D = move.to - move.from;
+  const r = Math.min(move.ramp ?? 0, T / 2);
+  if (r <= 1e-9) return move.from + D * (t / T);
+  const v = D / (T - r); // peak velocity: trapezoid area = v × (T − r) = D
+  let d: number;
+  if (t < r) d = 0.5 * (v / r) * t * t;
+  else if (t <= T - r) d = (v * r) / 2 + v * (t - r);
+  else d = D - 0.5 * (v / r) * (T - t) * (T - t);
+  return move.from + d;
+}
+
+/** Ramp (accel = brake) seconds for a move of `duration` by a resource kind. */
+export function rampFor(t: Timings, kind: 'lift' | 'shuttle', duration: number): number {
+  const ramp = kind === 'lift' ? t.liftAlign / 2 : t.shuttleSpeed / t.shuttleAccel;
+  return Math.min(ramp, duration / 2);
 }

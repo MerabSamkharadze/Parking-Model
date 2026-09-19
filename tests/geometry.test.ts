@@ -25,8 +25,9 @@ describe('geometry (SPEC §2/§9, DECISIONS E2/E3/S3)', () => {
     ]);
     expect(rowZ(B, 0)).toBeCloseTo(-4.4);
     expect(rowZ(B, 1)).toBeCloseTo(4.4);
-    expect(levelY(B, 0)).toBeCloseTo(-1.9);
-    expect(levelY(B, 5)).toBeCloseTo(-11.4);
+    // 1.9 m clear + 0.22 m slab per level (DECISIONS S39)
+    expect(levelY(B, 0)).toBeCloseTo(-2.12);
+    expect(levelY(B, 5)).toBeCloseTo(-12.72);
     expect(slotX(B, 0)).toBeCloseTo(-14.3);
     expect(slotX(B, 11)).toBeCloseTo(14.3);
     expect(corridorDistance(B, 0, 0)).toBeCloseTo(4.2);

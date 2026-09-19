@@ -106,6 +106,8 @@ export interface ResourceMove {
   to: number;
   start: number;
   end: number;
+  /** Seconds spent accelerating (and, symmetrically, braking); 0 = constant speed. */
+  ramp?: number;
 }
 
 export interface Resource {

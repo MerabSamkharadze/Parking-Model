@@ -8,7 +8,7 @@
 
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import { InstancedMesh, MeshStandardMaterial, Object3D } from 'three';
-import { slotPosition } from '@/lib/geometry';
+import { parkedZ, slotPosition } from '@/lib/geometry';
 import type { FacilityConfig, Slot } from '@/lib/sim/types';
 import { GHOST_OPACITY } from './LevelSlab';
 import { CAR_MATERIALS } from './VehiclePool';
@@ -53,7 +53,7 @@ export function ParkedCars({ cfg, slots, sliding, selectedLevel }: { cfg: Facili
         list.forEach((e, i) => {
           const pos = slotPosition(cfg, e.s.id);
           const k = e.s.cls === 'oversize' ? OVERSIZE_SCALE : 1;
-          _obj.position.set(pos.x, pos.y, pos.z);
+          _obj.position.set(pos.x, pos.y, parkedZ(cfg, e.s.id.row, baked[m].length * k));
           _obj.rotation.set(0, e.s.id.row === 0 ? Math.PI / 2 : -Math.PI / 2, 0);
           _obj.scale.set(k, k, k);
           _obj.updateMatrix();
@@ -70,7 +70,7 @@ export function ParkedCars({ cfg, slots, sliding, selectedLevel }: { cfg: Facili
       write(r.solidPaint, r.solidRest, p.solid);
       write(r.ghostPaint, r.ghostRest, p.ghost);
     });
-  }, [placements, cfg]);
+  }, [placements, cfg, baked]);
 
   const set = (m: number, key: keyof Set4) => (el: InstancedMesh | null) => {
     refs.current[m][key] = el;

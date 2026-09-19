@@ -14,6 +14,8 @@ import { useMemo, useRef } from 'react';
 import { BufferGeometry, Float32BufferAttribute, type MeshLambertMaterial } from 'three';
 import { bounds, layout } from '@/lib/geometry';
 import type { FacilityConfig } from '@/lib/sim/types';
+import { useUiStore } from '@/store/useUiStore';
+import { followed } from './VehiclePool';
 import type { Palette } from './palette';
 import { noiseTexture } from './textures';
 
@@ -22,11 +24,26 @@ export const STREET_NEAR = 12; // z where the pavement meets the road
 export const STREET_FAR = 24;
 export const KERB_LANE_Z = 21.4; // parked cars along the far kerb
 const LID_MIN = 0.12;
+/** The ground around the pit never gets thinner than this in the dollhouse view, so
+ *  street cars stand on asphalt instead of floating (DECISIONS S44). */
+const FRAME_MIN = 0.55;
 
 /** How solid the surface is for a camera at height y: see-through from above, opaque at eye level. */
 export function surfaceOpacity(cameraY: number): number {
   const k = Math.min(1, Math.max(0, (8 - cameraY) / 4.5));
   return LID_MIN + (1 - LID_MIN) * k;
+}
+
+/**
+ * The lid's target opacity this frame (DECISIONS S44): the camera-height rule, except
+ * that a camera looking at something underground — the follow camera on a car below the
+ * surface, the slot view — sees through the lid whatever its height. Section views
+ * (cutaway, shaft) look through the surface too.
+ */
+export function lidTarget(cameraY: number, preset: string, targetBelowGround: boolean): number {
+  if (preset === 'cutaway' || preset === 'shaft') return LID_MIN;
+  if (preset === 'slot' || (preset === 'follow' && targetBelowGround)) return LID_MIN;
+  return surfaceOpacity(cameraY);
 }
 
 function dashes(x0: number, x1: number, z: number, dash = 3, gap = 3): BufferGeometry {
@@ -70,17 +87,25 @@ export function Ground({ cfg, palette }: { cfg: FacilityConfig; palette: Palette
   }, []);
 
   // the whole surface fades in as the camera drops towards the street, so the
-  // dollhouse view from above keeps every level readable
-  useFrame(({ camera }) => {
-    const o = surfaceOpacity(camera.position.y);
+  // dollhouse view from above keeps every level readable; the lid clears whenever
+  // the camera is meant to look underground (follow / slot / section views)
+  useFrame(({ camera }, dt) => {
+    const { cameraPreset, selectedSlotKey } = useUiStore.getState();
+    const below = (cameraPreset === 'follow' && followed.active && followed.y < -0.3) || (cameraPreset === 'slot' && selectedSlotKey !== null);
+    const o = lidTarget(camera.position.y, cameraPreset, below);
+    const section = cameraPreset === 'cutaway' || cameraPreset === 'shaft';
+    const frame = section ? LID_MIN : Math.max(FRAME_MIN, Math.min(1, o + 0.08));
+    const rate = 1 - Math.exp(-Math.min(dt, 0.1) * 6); // ~0.5 s ease, no pops
     const apply = (m: MeshLambertMaterial | null, target: number) => {
-      if (!m || Math.abs(m.opacity - target) < 0.002) return;
-      m.opacity = target;
-      m.transparent = target < 0.999;
-      m.depthWrite = target > 0.6;
+      if (!m) return;
+      const next = Math.abs(m.opacity - target) < 0.002 ? target : m.opacity + (target - m.opacity) * rate;
+      if (next === m.opacity) return;
+      m.opacity = next;
+      m.transparent = next < 0.999;
+      m.depthWrite = next > 0.6;
     };
     apply(lid.current, o);
-    for (const m of fading.current) apply(m, Math.min(1, o + 0.08));
+    for (const m of fading.current) apply(m, frame);
   });
 
   return (

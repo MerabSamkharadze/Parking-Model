@@ -24,7 +24,8 @@ export const CAR_MODELS: CarModelSpec[] = [
   { id: 'suv', file: '/models/suv.glb', lod: '/models/lod/suv.glb', paint: 'White', share: 0.2 },
 ];
 
-export const OVERSIZE_SCALE = 1.12;
+/** Oversize cars are the SUV a little larger; 1.06 keeps their quarter turn inside the slot mouths (DECISIONS S40). */
+export const OVERSIZE_SCALE = 1.06;
 
 /** Realistic paint colours, muted for a dark scene (linear sRGB via Color). */
 export const PAINTS = ['#e6e7e4', '#b9bec2', '#4b5157', '#202428', '#22406e', '#8d2b2b', '#c7b184', '#31543e', '#6f7f8f', '#3a2f2a'].map((c) => new Color(c));

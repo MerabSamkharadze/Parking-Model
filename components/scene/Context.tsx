@@ -10,7 +10,7 @@
 
 import { useFrame } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef } from 'react';
-import { AdditiveBlending, Color, InstancedMesh, type MeshBasicMaterial, Object3D } from 'three';
+import { AdditiveBlending, BoxGeometry, Color, InstancedMesh, type MeshBasicMaterial, Object3D } from 'three';
 import { bounds, layout } from '@/lib/geometry';
 import type { FacilityConfig } from '@/lib/sim/types';
 import { type Setting, useUiStore } from '@/store/useUiStore';
@@ -291,12 +291,39 @@ function Block({ x, y, z, w, h, d, color }: { x: number; y: number; z: number; w
 
 // ---- settings -----------------------------------------------------------------
 
-function Mall({ palette, minX, maxX }: { palette: Palette; minX: number; maxX: number }) {
+/**
+ * The part of a building that stands over the pit (DECISIONS S46): drawn as a
+ * ghosted volume with its edges, so the pitch "under a shopping centre / tower"
+ * is literally true on screen while every level stays readable through it.
+ */
+function OverPit({ cfg, h, zFront, color }: { cfg: FacilityConfig; h: number; zFront: number; color: string }) {
+  const b = bounds(cfg);
+  const w = b.maxX - b.minX + 12;
+  const d = zFront - (b.minZ - 3);
+  const cx = (b.minX + b.maxX) / 2;
+  const cz = (zFront + b.minZ - 3) / 2;
+  const geometry = useMemo(() => new BoxGeometry(w, h, d), [w, h, d]);
+  return (
+    <group position={[cx, h / 2 + 0.05, cz]}>
+      <mesh geometry={geometry}>
+        <meshStandardMaterial color={color} transparent opacity={0.1} depthWrite={false} roughness={0.9} />
+      </mesh>
+      <lineSegments>
+        <edgesGeometry args={[geometry]} />
+        <lineBasicMaterial color="#3a4a53" transparent opacity={0.6} />
+      </lineSegments>
+    </group>
+  );
+}
+
+function Mall({ cfg, palette, minX, maxX }: { cfg: FacilityConfig; palette: Palette; minX: number; maxX: number }) {
   const x0 = minX - 30;
   const x1 = maxX + 30;
-  const zFront = -STREET_NEAR - 4;
+  // the solid block starts behind the pit; its front wing over the pit is ghosted
+  const zFront = -STREET_NEAR - 12;
   return (
     <group>
+      <OverPit cfg={cfg} h={11} zFront={zFront} color="#151d22" />
       <Block x={(x0 + x1) / 2} y={0} z={zFront - 26} w={x1 - x0} h={11} d={52} color="#151d22" />
       {/* glass ground floor + a lit sign band */}
       <mesh position={[(x0 + x1) / 2, 2.6, zFront + 0.04]}>
@@ -317,11 +344,12 @@ function Mall({ palette, minX, maxX }: { palette: Palette; minX: number; maxX: n
   );
 }
 
-function Tower({ minX, maxX }: { minX: number; maxX: number }) {
+function Tower({ cfg, minX, maxX }: { cfg: FacilityConfig; minX: number; maxX: number }) {
   const cx = (minX + maxX) / 2;
-  const zFront = -STREET_NEAR - 4;
+  const zFront = -STREET_NEAR - 12;
   return (
     <group>
+      <OverPit cfg={cfg} h={6} zFront={zFront} color="#151d22" />
       <Block x={cx} y={0} z={zFront - 22} w={maxX - minX + 20} h={6} d={44} color="#151d22" />
       <Block x={cx} y={6} z={zFront - 24} w={28} h={64} d={28} color="#121a1f" />
       <Windows x0={cx - 14} x1={cx + 14} y0={6} y1={70} z={zFront - 10} facing={1} seed={31} litShare={0.4} pitchX={2.4} pitchY={3.2} />
@@ -380,7 +408,7 @@ function Trees({ count, xRange, zRange, seed, avoid }: { count: number; xRange: 
 
 function Courtyard({ cfg, minX, maxX }: { cfg: FacilityConfig; minX: number; maxX: number }) {
   const b = bounds(cfg);
-  const zFront = -STREET_NEAR - 4;
+  const zFront = -STREET_NEAR - 10;
   const west = minX - 12;
   const east = maxX + 12;
   const avoid = useMemo(() => {
@@ -428,8 +456,8 @@ export function Context({ cfg, palette, setting, reduced }: { cfg: FacilityConfi
       {/* a couple of warm lights over the bays for the street scenes */}
       <pointLight position={[b.minX + 4, 6.5, 0]} color="#ffd9a0" intensity={70} distance={40} decay={2} />
       <pointLight position={[b.maxX - 4, 6.5, 0]} color="#ffd9a0" intensity={70} distance={40} decay={2} />
-      {setting === 'mall' && <Mall palette={palette} minX={b.minX} maxX={b.maxX} />}
-      {setting === 'tower' && <Tower minX={b.minX} maxX={b.maxX} />}
+      {setting === 'mall' && <Mall cfg={cfg} palette={palette} minX={b.minX} maxX={b.maxX} />}
+      {setting === 'tower' && <Tower cfg={cfg} minX={b.minX} maxX={b.maxX} />}
       {setting === 'courtyard' && <Courtyard cfg={cfg} minX={b.minX} maxX={b.maxX} />}
       {/* the far side of the street: a low wall of city so the horizon is not empty */}
       <Block x={0} y={0} z={STREET_FAR + 40} w={260} h={9} d={30} color="#121a1f" />

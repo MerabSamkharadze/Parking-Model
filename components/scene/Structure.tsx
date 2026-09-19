@@ -9,11 +9,15 @@
 
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import { InstancedMesh, Object3D } from 'three';
-import { layout, levelY } from '@/lib/geometry';
+import { bounds, layout, levelY } from '@/lib/geometry';
 import type { FacilityConfig } from '@/lib/sim/types';
 import type { Palette } from './palette';
 
 const POST = 0.14;
+/** Inner posts stand this far into the slot from the corridor edge: outside the
+ *  turning circle of a car making its quarter turn in the corridor (DECISIONS S40). */
+const POST_INSET = 1.3;
+const POST_TOP = -0.02; // just under the surface lid
 const RAIL_W = 0.1;
 const RAIL_H = 0.07;
 const MAX_LEVEL_LIGHTS = 3;
@@ -35,7 +39,7 @@ export function Structure({ cfg, palette }: { cfg: FacilityConfig; palette: Pale
   const litLevels = useMemo(() => litLevelsOf(cfg.levels), [cfg.levels]);
   const posts = useRef<InstancedMesh>(null);
   const rails = useRef<InstancedMesh>(null);
-  const depth = -cfg.levels * cfg.levelHeight;
+  const depth = bounds(cfg).minY;
   const zInner = cfg.corridorWidth / 2;
   const zOuter = cfg.corridorWidth / 2 + cfg.slotDepth;
   const postList = useMemo(() => {
@@ -43,7 +47,7 @@ export function Structure({ cfg, palette }: { cfg: FacilityConfig; palette: Pale
     for (let z = 0; z < l.zones; z++) {
       for (let k = 0; k <= l.colsPerZone[z]; k++) {
         const x = l.zoneStartX[z] + k * cfg.pitch;
-        out.push([x, -zInner - 0.12], [x, zInner + 0.12], [x, -zOuter + 0.1], [x, zOuter - 0.1]);
+        out.push([x, -zInner - POST_INSET], [x, zInner + POST_INSET], [x, -zOuter + 0.1], [x, zOuter - 0.1]);
       }
     }
     return out;
@@ -66,8 +70,8 @@ export function Structure({ cfg, palette }: { cfg: FacilityConfig; palette: Pale
     const r = rails.current;
     if (!p || !r) return;
     postList.forEach(([x, z], i) => {
-      _obj.position.set(x, depth / 2, z);
-      _obj.scale.set(1, -depth, 1);
+      _obj.position.set(x, (depth + POST_TOP) / 2, z);
+      _obj.scale.set(1, POST_TOP - depth, 1);
       _obj.rotation.set(0, 0, 0);
       _obj.updateMatrix();
       p.setMatrixAt(i, _obj.matrix);
@@ -96,7 +100,8 @@ export function Structure({ cfg, palette }: { cfg: FacilityConfig; palette: Pale
       </instancedMesh>
       {/* light strips under each slab and a warm point light on every lit level */}
       {Array.from({ length: cfg.levels }, (_, level) => {
-        const y = levelY(cfg, level) + cfg.levelHeight - 0.32;
+        // the strip hangs just under the slab above (clear height is levelHeight)
+        const y = levelY(cfg, level) + cfg.levelHeight - 0.04;
         return (
           <group key={level}>
             {l.zoneStartX.map((x0, z) => {
