@@ -1,13 +1,29 @@
-// SPEC §8 control-panel blocks. Block 1 (run control) is live from M3; the
-// rest are filled in M4 (2–9), M5 (compare) and M6 (failures).
+// SPEC §8 control-panel blocks 1–9 (M3/M4); compare (M5) and failures (M6)
+// are still to come.
 
 import type { ComponentType } from 'react';
+import { DemandForm } from '@/components/panel/DemandForm';
+import { EventLog } from '@/components/panel/EventLog';
+import { FacilityForm } from '@/components/panel/FacilityForm';
+import { IndexTable } from '@/components/panel/IndexTable';
+import { LiveState } from '@/components/panel/LiveState';
 import { RunControl } from '@/components/panel/RunControl';
+import { StrategyForm } from '@/components/panel/StrategyForm';
+import { Telemetry } from '@/components/panel/Telemetry';
+import { VersionPicker } from '@/components/panel/VersionPicker';
 
 const BLOCKS = ['Run control', 'Version', 'Facility', 'Strategy', 'Demand', 'Live state', 'Telemetry', 'Index', 'Event log', 'Failures'] as const;
 
 const CONTENT: Partial<Record<(typeof BLOCKS)[number], ComponentType>> = {
   'Run control': RunControl,
+  Version: VersionPicker,
+  Facility: FacilityForm,
+  Strategy: StrategyForm,
+  Demand: DemandForm,
+  'Live state': LiveState,
+  Telemetry: Telemetry,
+  Index: IndexTable,
+  'Event log': EventLog,
 };
 
 export function PanelRail() {

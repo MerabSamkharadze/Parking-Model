@@ -3,15 +3,11 @@
 // SPEC §8 block 1: play/pause, speed 1× / 4× / 16× / 60×, sim clock, reset,
 // seed. Every control acts immediately on the store — no submit.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Chip, chipClass } from '@/components/ui/Chip';
+import { RollingNumber } from '@/components/ui/StatValue';
 import { clockOf } from '@/lib/format';
 import { SPEEDS, useSimStore } from '@/store/useSimStore';
-
-export function chipClass(active: boolean): string {
-  return `rounded-sm border px-2 py-0.5 text-xs leading-5 transition-colors ${
-    active ? 'border-amber text-amber' : 'border-line text-ink-soft hover:border-slab-edge hover:text-ink'
-  }`;
-}
 
 export function RunControl() {
   const running = useSimStore((s) => s.running);
@@ -24,6 +20,7 @@ export function RunControl() {
   const clock = useSimStore((s) => (s.snapshot ? clockOf(s.snapshot.secondsOfDay) : '00:00'));
   const day = useSimStore((s) => s.snapshot?.day ?? 0);
   const [seedText, setSeedText] = useState(String(seed));
+  useEffect(() => setSeedText(String(seed)), [seed]);
 
   const commitSeed = () => {
     const n = Number.parseInt(seedText, 10);
@@ -34,19 +31,18 @@ export function RunControl() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
-        <button type="button" aria-pressed={running} className={`${chipClass(running)} min-w-16`} onClick={toggleRunning}>
+        <Chip active={running} className="min-w-16" onClick={toggleRunning}>
           {running ? 'Pause' : 'Play'}
-        </button>
+        </Chip>
         <div className="flex gap-1" role="group" aria-label="Speed">
           {SPEEDS.map((v) => (
-            <button key={v} type="button" aria-pressed={speed === v} className={`font-mono ${chipClass(speed === v)}`} onClick={() => setSpeed(v)}>
+            <Chip key={v} active={speed === v} className="font-mono" onClick={() => setSpeed(v)}>
               {v}×
-            </button>
+            </Chip>
           ))}
         </div>
-        <span className="ml-auto font-mono text-sm tabular-nums" aria-label="Simulation clock">
-          {day > 0 ? `D${day + 1} ` : ''}
-          {clock}
+        <span className="ml-auto text-sm" aria-label="Simulation clock">
+          <RollingNumber value={`${day > 0 ? `D${day + 1} ` : ''}${clock}`} />
         </span>
       </div>
       <div className="flex items-center gap-2 text-xs text-ink-soft">

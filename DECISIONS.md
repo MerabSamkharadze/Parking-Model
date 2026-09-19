@@ -208,5 +208,33 @@ will be adjusted.
 - **S22 — run control lives in the panel from M3** (play/pause, 1×/4×/16×/60×, clock,
   reset, seed) because M3's DoD needs it; M4 fills the other blocks. The header clock
   is live and shows `D2` … on later days.
+- **S23 — panel cadence.** Panel blocks read the snapshot at most twice a second
+  (`panelTick`), the event log only when events change, sparklines and the timeline once
+  per sim-minute (`lib/history.ts`, a 1440-slot ring of throughput / queue / store P50 /
+  lift utilisation / occupancy). The scene keeps its 20 Hz snapshots; React never
+  re-renders the panel at snapshot rate.
+- **S24 — what restarts, what is hot.** Facility fields are a draft: the "Restart needed"
+  badge appears as soon as it differs and an explicit Restart applies it (SPEC §8.3).
+  Demand profile and residents restart immediately (they seed the engine). Strategy is
+  hot (SPEC §8.4). Any of these makes the running config a `custom` version derived
+  from the preset (`deriveConfig`, SPEC §5), shown in the header and the version list;
+  saving and sharing it is M5. A restart drops the index selection.
+- **S25 — digits roll.** `RollingNumber` / `StatValue` render each digit as a 1ch column
+  that translates to its new value (300 ms; none under `prefers-reduced-motion`). Every
+  stat has a fixed width in `ch`, sparklines and bars are fixed boxes, so an update can
+  never shift the layout (M4 DoD). When a value's length changes the digits remount
+  instead of rolling.
+- **S26 — index table.** Hand-rolled windowing: 24 px rows in a 240 px viewport, four rows
+  of overscan. Rows are cars parked or in the system; moving cars show their job stage
+  in amber instead of a slot. A row click selects the car and, when parked, isolates its
+  level and flies to the slot; "Retrieve" calls the selected parked car; the Demand
+  block's "− Retrieve" uses the selection, else the earliest planned departure (S7).
+- **S27 — timeline strip.** Per-minute throughput (line, `--data`) and queue (area,
+  `--clay`) for the current day, an amber cursor at now; minutes not yet reached today
+  show yesterday's values dimmed. Axis labels are the only mono text on it.
+- **S28 — event log.** Filters: all / INSERT / SELECT (+PREFETCH) / LOCK WAIT / REJECT /
+  ops (SHUFFLE, DEFRAG, FAIL, RECOVER, SPARE). Colours by kind (clay for REJECT/FAIL,
+  amber for LOCK WAIT/SPARE, data for SELECT, lime for RECOVER). Auto-scroll sticks to
+  the bottom unless the reader scrolled up; timestamps are HH:MM:SS of the sim day.
 - **M0** header name "AVP Simulator"; header 48 px, timeline 96 px; English UI; stacked
   layout under 1024 px; TypeScript 5.9 and Next 15.5 pinned.

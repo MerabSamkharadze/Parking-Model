@@ -9,9 +9,9 @@ Updated after each milestone. Gates: `pnpm lint`, `pnpm typecheck`, `pnpm test`,
 | M0 scaffold | ✅ done | `fac7360` | Next 15.5, TS 5.9 strict, Tailwind v4 tokens, Noto Sans Georgian + IBM Plex Mono, layout shell |
 | M1 sim engine | ✅ done | `7f6452a` | pure TS engine, 46 tests, `pnpm bench`; §2 figures reproduced (below) |
 | M2 static 3D | ✅ done | `74dcca7` | geometry from config, InstancedMesh slots, 4 camera presets, level isolation, flyTo |
-| M3 engine ↔ scene | ✅ done | — | 20 Hz snapshot bridge, render clock, VehiclePool, lift/shuttle/car animation at every stage, run control |
-| M4 control panel | ⬜ next | | §8 blocks 2–9, index table + flyTo, event log, sparklines, timeline strip |
-| M5 versions | ⬜ | | presets A–D in the UI, custom configs, localStorage, share URL, compare mode (worker) |
+| M3 engine ↔ scene | ✅ done | `00c21ec` | 20 Hz snapshot bridge, render clock, VehiclePool, lift/shuttle/car animation at every stage, run control |
+| M4 control panel | ✅ done | — | §8 blocks 1–9, virtualised index + flyTo, event log, sparklines, timeline strip, custom versions |
+| M5 versions | ⬜ next | | saved custom versions (localStorage), share URL, compare mode (worker) |
 | M6 failure & polish | ⬜ | | failure panel, degraded UI, keyboard shortcuts, reduced motion, README, Lighthouse ≥ 95 |
 
 ## M1 — engine vs SPEC §2 (preset B, weekday demand, seed 42, 24 h)
@@ -148,6 +148,43 @@ Repeat: `DPR=2 node scripts/screenshot.mjs http://localhost:3000/ scripts/shots/
   (`epoch:slotsVersion`, shuttle id lists) and a content-compared `Set` for sliding
   slots keep React idle while the engine runs.
 
+## M4 — control panel (what is in the rail)
+
+`components/panel/*` — one component per SPEC §8 block, mounted by `PanelRail`:
+
+| block | component | acts on |
+|---|---|---|
+| 1 Run control | `RunControl` | running, speed, seed, reset |
+| 2 Version | `VersionPicker` | `setPreset` (restart, same seed); shows the custom version when derived |
+| 3 Facility | `FacilityForm` | draft → "Restart needed" → `applyFacility` (custom version, restart); layout warnings inline |
+| 4 Strategy | `StrategyForm` | `setStrategy` → engine hot (`setAllocator`, `setPrefetchLead`, `setNightDefrag`) |
+| 5 Demand | `DemandForm` | profile / residents (restart), `+ Car` → `addVehicle`, `− Retrieve` → `callVehicle` |
+| 6 Live state | `LiveState` | occupancy bars per level (hot levels amber), occupancy / hot zone / in-transit / queues, degraded banner |
+| 7 Telemetry | `Telemetry` | 4 sparklines over the last 3 h, percentile table, capacity / peak / completed / rejected |
+| 8 Index | `IndexTable` | virtualised list, search, row → select + flyTo, Retrieve |
+| 9 Event log | `EventLog` | filters, colours, auto-scroll |
+
+Plus `components/ui/{Chip,Badge,Toggle,Slider,NumberField,StatValue,Sparkline}`,
+`lib/history.ts` (per-minute ring), `lib/presets.ts › deriveConfig / versionLabel /
+CONFIG_LIMITS`, `lib/format.ts`, and the live `TimelineStrip` (throughput + queue, cursor).
+
+### M4 DoD, measured (headless Chrome 153, DOM-driven, `scripts/shots/panel.js`)
+
+| check | result |
+|---|---|
+| every control reflects on the sim | `nearest` chip → `engine.getStrategy().allocator === 'nearest'`, config `custom · from B`; defrag switch → `nightDefrag: true`; `+ Car` → 1 job; index row → `selectedVehicleId #0001`, camera `slot` on `L3-R1-12`; `Retrieve` → a retrieve job; preset C row → restart (epoch +1, t = 0, config C) |
+| no layout shift while numbers update | the ten panel sections' top offsets before and after 2.5 s at 60×: `[0,117,314,533,660,803,1028,1325,1706,2047]` both times |
+| frame rate with the panel live | 60 FPS at 60× (preset C, dpr 1.75) |
+| gates | lint, typecheck, 55 tests, build green |
+
+### Things learned in M4
+
+- `useStore(selector)` at 20 Hz needs cheap, stable keys: the panel gets `panelTick`
+  (≤ 2 Hz) and reads the snapshot off the store; history is a mutable ring with a version
+  number. Doing this from the start kept the scene's frame budget untouched.
+- A restart must clear UI selections (slot / vehicle) or the index points at a car that
+  no longer exists.
+
 ## What the engine exposes (for M2–M6)
 
 - `new Engine({ config, demand, seed, devChecks })`, `step()`, `run(seconds)`, `snapshot()`,
@@ -164,6 +201,6 @@ Repeat: `DPR=2 node scripts/screenshot.mjs http://localhost:3000/ scripts/shots/
 
 ## Left to do
 
-Everything from M4 on (table above). Open items that need the user's eye, not code:
+Everything from M5 on (table above). Open items that need the user's eye, not code:
 the header name "AVP Simulator", header/timeline heights (48/96 px), and any decision in
 `DECISIONS.md` they want changed.

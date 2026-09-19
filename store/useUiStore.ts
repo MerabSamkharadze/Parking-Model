@@ -12,12 +12,15 @@ interface UiState {
   /** Level isolation (SPEC §9): the isolated 0-based level, or null for all. */
   selectedLevel: number | null;
   selectedSlotKey: string | null;
+  /** Index row selection (SPEC §8.8); "− retrieve" calls this car first (DECISIONS S7). */
+  selectedVehicleId: string | null;
   setCameraPreset: (p: CameraPreset) => void;
   toggleLevel: (level: number) => void;
   clearLevel: () => void;
   /** Select a slot, isolate its level and fly the camera to it. */
   flyTo: (slotKey: string) => void;
   selectSlot: (slotKey: string | null) => void;
+  selectVehicle: (vehicleId: string | null) => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -25,10 +28,12 @@ export const useUiStore = create<UiState>((set) => ({
   cameraNonce: 0,
   selectedLevel: null,
   selectedSlotKey: null,
+  selectedVehicleId: null,
   setCameraPreset: (cameraPreset) => set((s) => ({ cameraPreset, cameraNonce: s.cameraNonce + 1 })),
   toggleLevel: (level) => set((s) => ({ selectedLevel: s.selectedLevel === level ? null : level })),
   clearLevel: () => set({ selectedLevel: null }),
   flyTo: (slotKey) =>
     set((s) => ({ selectedSlotKey: slotKey, selectedLevel: parseSlotKey(slotKey).level, cameraPreset: 'slot', cameraNonce: s.cameraNonce + 1 })),
   selectSlot: (selectedSlotKey) => set({ selectedSlotKey }),
+  selectVehicle: (selectedVehicleId) => set({ selectedVehicleId }),
 }));

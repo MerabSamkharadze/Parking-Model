@@ -85,3 +85,44 @@ export type PresetId = (typeof PRESET_IDS)[number];
 export function presetById(id: string): FacilityConfig | undefined {
   return (PRESETS as Record<string, FacilityConfig>)[id];
 }
+
+/** Fields a user can edit in the panel (SPEC §8.3 / §8.4). */
+export type ConfigPatch = Partial<Pick<FacilityConfig, 'levels' | 'cols' | 'lifts' | 'baysIn' | 'baysOut' | 'shuttlesPerLevel' | 'slotMix' | 'allocator' | 'prefetchLeadMinutes' | 'nightDefrag'>>;
+
+/**
+ * SPEC §5: any manual change creates a `custom` version derived from the
+ * preset it started from. Editing a custom version keeps its origin.
+ */
+export function deriveConfig(base: FacilityConfig, patch: ConfigPatch): FacilityConfig {
+  const origin = base.derivedFrom ?? base.id;
+  return {
+    ...base,
+    ...patch,
+    slotMix: patch.slotMix ? { ...base.slotMix, ...patch.slotMix } : base.slotMix,
+    id: 'custom',
+    label: 'Custom',
+    note: `Derived from ${origin}.`,
+    derivedFrom: origin,
+  };
+}
+
+export function isCustom(cfg: FacilityConfig): boolean {
+  return cfg.derivedFrom !== undefined;
+}
+
+/** "B · Recommended" / "Custom · from B" for the header and the version list. */
+export function versionLabel(cfg: FacilityConfig): string {
+  return cfg.derivedFrom ? `Custom · from ${cfg.derivedFrom}` : `${cfg.id} · ${cfg.label}`;
+}
+
+/** Edit limits for the facility form: what the layout and the engine support. */
+export const CONFIG_LIMITS = {
+  levels: { min: 2, max: 10 },
+  cols: { min: 6, max: 24 },
+  lifts: { min: 1, max: 4 },
+  baysIn: { min: 1, max: 10 },
+  baysOut: { min: 1, max: 10 },
+  shuttlesPerLevel: { min: 1, max: 2 },
+  ev: { min: 0, max: 0.4 },
+  oversize: { min: 0, max: 0.2 },
+} as const;
