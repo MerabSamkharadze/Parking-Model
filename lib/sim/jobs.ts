@@ -98,6 +98,7 @@ export class JobMachine {
       callAt: this.host.t,
       finishedAt: null,
       resources: {},
+      bay: null,
       progress: 0,
       priority,
       prefetch: false,
@@ -183,6 +184,7 @@ export class JobMachine {
       case 'store': {
         if (job.stage === 'queued') {
           job.resources.bay = grant.resources[0].id;
+          job.bay = job.resources.bay;
           this.host.vehicle(job.vehicleId).state = 'in_system';
           this.setStage(job, 'bay', this.timed(this.cfg.timings.dropOff));
         } else if (job.stage === 'lift_wait') {
@@ -212,6 +214,7 @@ export class JobMachine {
           this.setStageUntil(job, 'corridor_out', arrive);
         } else if (job.stage === 'bay_wait') {
           job.resources.bay = grant.resources[0].id;
+          job.bay = job.resources.bay;
           this.setStage(job, 'bay_out', this.timed(this.cfg.timings.bayToLift));
         }
         return;

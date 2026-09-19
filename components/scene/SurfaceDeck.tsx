@@ -45,6 +45,11 @@ export function SurfaceDeck({ cfg, palette }: { cfg: FacilityConfig; palette: Pa
         <planeGeometry args={[width, depth]} />
         <meshStandardMaterial color={palette.slab} transparent opacity={0.22} depthWrite={false} />
       </mesh>
+      {/* transfer lane: the deck path cars take between the shafts and the bays (DECISIONS E1: pooled lifts) */}
+      <mesh position={[(b.minX + b.maxX) / 2, 0.01, 0]} rotation-x={-Math.PI / 2}>
+        <planeGeometry args={[b.maxX - b.minX, 3.2]} />
+        <meshStandardMaterial color={palette.slabEdge} transparent opacity={0.18} depthWrite={false} />
+      </mesh>
       {bays.map((bay, i) => (
         <RectOutline key={i} x={bay.x} y={0.02} z={bay.z} width={BAY_W} depth={BAY_D} color={palette.slabEdge} />
       ))}

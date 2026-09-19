@@ -11,7 +11,8 @@
 //
 // Updates are incremental: slot objects are replaced by the engine only when
 // they change, so a single slot's colour change touches one instance and
-// never re-mounts anything (M2 DoD).
+// never re-mounts anything (M2 DoD). Slots whose car is mid-slide (insert /
+// extract, `sliding`) drop to a pad so the VehiclePool's car is what moves.
 
 import type { ThreeEvent } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
@@ -33,17 +34,21 @@ interface Placement {
   index: number;
 }
 
+const NO_SLIDING: ReadonlySet<string> = new Set();
+
 export function SlotField({
   cfg,
   slots,
   palette,
   selectedLevel,
+  sliding = NO_SLIDING,
   onPick,
 }: {
   cfg: FacilityConfig;
   slots: readonly Slot[];
   palette: Palette;
   selectedLevel: number | null;
+  sliding?: ReadonlySet<string>;
   onPick?: (slotKey: string) => void;
 }) {
   const n = slots.length;
@@ -68,7 +73,8 @@ export function SlotField({
   const ghostRef = useRef<InstancedMesh>(null);
   const placement = useRef<Placement[]>([]);
   const solidSlots = useRef<number[]>([]); // instance index → slot index (for picking)
-  const prev = useRef<{ slots: readonly Slot[] | null; level: number | null }>({ slots: null, level: null });
+  const keyIndex = useRef<Map<string, number>>(new Map());
+  const prev = useRef<{ slots: readonly Slot[] | null; level: number | null; sliding: ReadonlySet<string> }>({ slots: null, level: null, sliding: NO_SLIDING });
 
   useEffect(() => {
     const solid = solidRef.current;
@@ -81,7 +87,7 @@ export function SlotField({
       const p = placement.current[i];
       const mesh = meshes[p.mesh];
       const pos = slotPosition(cfg, s.id);
-      const h = s.state === 'occupied' ? HEIGHT.occupied : s.state === 'reserved' ? HEIGHT.reserved : HEIGHT.free;
+      const h = sliding.has(s.key) ? HEIGHT.free : s.state === 'occupied' ? HEIGHT.occupied : s.state === 'reserved' ? HEIGHT.reserved : HEIGHT.free;
       _obj.position.set(pos.x, pos.y + h / 2, pos.z);
       _obj.scale.set(1, h, 1);
       _obj.updateMatrix();
@@ -96,6 +102,7 @@ export function SlotField({
       let si = 0;
       let gi = 0;
       solidSlots.current = [];
+      keyIndex.current = new Map(slots.map((s, i) => [s.key, i]));
       placement.current = slots.map((s, i) => {
         if (selectedLevel === null || s.id.level === selectedLevel) {
           solidSlots.current[si] = i;
@@ -115,11 +122,19 @@ export function SlotField({
       const old = prev.current.slots!;
       let touchedSolid = false;
       let touchedGhost = false;
-      for (let i = 0; i < n; i++) {
-        if (old[i] === slots[i]) continue;
+      const touch = (i: number) => {
+        if (i < 0) return;
         write(i);
         if (placement.current[i].mesh === 0) touchedSolid = true;
         else touchedGhost = true;
+      };
+      if (old !== slots) {
+        for (let i = 0; i < n; i++) if (old[i] !== slots[i]) touch(i);
+      }
+      const wasSliding = prev.current.sliding;
+      if (wasSliding !== sliding) {
+        for (const key of wasSliding) if (!sliding.has(key)) touch(keyIndex.current.get(key) ?? -1);
+        for (const key of sliding) if (!wasSliding.has(key)) touch(keyIndex.current.get(key) ?? -1);
       }
       if (touchedSolid) {
         solid.instanceMatrix.needsUpdate = true;
@@ -130,8 +145,8 @@ export function SlotField({
         if (ghost.instanceColor) ghost.instanceColor.needsUpdate = true;
       }
     }
-    prev.current = { slots, level: selectedLevel };
-  }, [slots, selectedLevel, cfg, colors, n]);
+    prev.current = { slots, level: selectedLevel, sliding };
+  }, [slots, selectedLevel, sliding, cfg, colors, n]);
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     if (!onPick || e.instanceId === undefined) return;

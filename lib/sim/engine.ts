@@ -111,6 +111,7 @@ export class Engine {
   private eventSeq = 0;
   private eventsDirty = true;
   private eventsView: SimEvent[] = [];
+  private slotsVersion = 0;
 
   private readonly storeStats = new RingStats();
   private readonly retrieveStats = new RingStats();
@@ -260,6 +261,7 @@ export class Engine {
     const i = this.slotByKey.get(key);
     if (i === undefined) throw new Error(`unknown slot ${key}`);
     this.slots[i] = { ...this.slots[i], ...patch };
+    this.slotsVersion++;
   }
 
   private getVehicle(id: string): Vehicle {
@@ -833,6 +835,7 @@ export class Engine {
       day: this.day,
       secondsOfDay: this.secondsOfDay,
       slots: this.slots.slice(),
+      slotsVersion: this.slotsVersion,
       vehicles,
       jobs,
       resources: this.rm.snapshot(t),

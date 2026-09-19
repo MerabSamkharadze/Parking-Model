@@ -28,20 +28,25 @@ function chip(active: boolean): string {
 
 function Overlay() {
   const cfg = useSimStore((s) => s.config);
-  const snapshot = useSimStore((s) => s.snapshot);
+  // one string per bay kind: re-renders only when a bay changes state
+  const bayDots = useSimStore((s) => {
+    if (!s.snapshot) return '';
+    let inDots = '';
+    let outDots = '';
+    for (const r of s.snapshot.resources) {
+      if (r.kind === 'bay_in') inDots += r.busyWith ? '●' : '○';
+      else if (r.kind === 'bay_out') outDots += r.busyWith ? '●' : '○';
+    }
+    return `in ${inDots} · out ${outDots}`;
+  });
   const selectedLevel = useUiStore((s) => s.selectedLevel);
   const toggleLevel = useUiStore((s) => s.toggleLevel);
   const preset = useUiStore((s) => s.cameraPreset);
   const setPreset = useUiStore((s) => s.setCameraPreset);
-  const baysIn = snapshot?.resources.filter((r) => r.kind === 'bay_in') ?? [];
-  const baysOut = snapshot?.resources.filter((r) => r.kind === 'bay_out') ?? [];
-  const dot = (busy: boolean) => (busy ? '●' : '○');
   return (
     <div className="pointer-events-none absolute inset-x-4 bottom-3 flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
       <div className="flex flex-col gap-2">
-        <p className="font-mono text-xs text-ink-soft">
-          in {baysIn.map((b) => dot(!!b.busyWith)).join('')} · out {baysOut.map((b) => dot(!!b.busyWith)).join('')}
-        </p>
+        <p className="font-mono text-xs text-ink-soft">{bayDots}</p>
         <div className="pointer-events-auto flex flex-wrap gap-1" role="group" aria-label="Level isolation">
           {Array.from({ length: cfg.levels }, (_, level) => (
             <button

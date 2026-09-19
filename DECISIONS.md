@@ -121,6 +121,12 @@ will be adjusted.
   place idle shuttles rest (E4), instead of the west end. Bench figures are unchanged
   (the rest logic moved them there within the first 10 sim-seconds anyway); the scene
   no longer shows six shuttles hanging in the west shaft at 00:00.
+- **E21 — `Job.bay` and `slotsVersion`.** A store's input bay is released the moment the
+  car leaves it (`lift_wait` → `to_lift`), which is right for capacity but leaves the
+  scene without the transfer's origin; jobs therefore keep `bay` (the bay id) after the
+  resource is released. Snapshots carry `slotsVersion`, bumped on every slot change, so
+  React work on the slot field happens only when a slot actually changed (20 Hz
+  snapshots otherwise re-render nothing).
 - **E19 — bench runner.** `pnpm bench` runs `scripts/bench.ts` with Node's built-in
   `--experimental-strip-types` (Node 22.17 here) — no extra dependency. Consequences:
   engine files import each other with explicit `.ts` extensions and use `import type`
@@ -169,5 +175,38 @@ will be adjusted.
 - **S16 — pins.** React/react-dom `~19.2` (R3F 9.7 peer range `<19.3`); `@types/three`
   for strict typing; IBM Plex Mono is self-hosted (`public/fonts`, OFL) because drei
   `Text` needs a font file, not a CSS font.
+- **S17 — the catch-up cap drops owed time.** `advance(dt)` accumulates `dt × speed`,
+  steps whole ticks, at most 40 per frame (SPEC §4.1). Sim time owed beyond that cap is
+  discarded: after a hidden tab the clock slips instead of bursting (a burst would
+  freeze the UI for seconds at 60×). At 60 FPS the cap only binds above 240×; at 15 FPS
+  it caps the effective speed at exactly 60×.
+- **S18 — render clock.** Snapshots go to React at 20 Hz; the scene never animates from
+  frame deltas. Every frame reads `clock.t = engine.t + owed` (the sub-tick time) and
+  evaluates the engine's own move descriptors (`positionAt`) and stage windows
+  (`progressAt`), so 1× motion is smooth at 60 FPS and 60× shows the same trajectories
+  faster. A frame may run ≤ 50 ms ahead of its snapshot; everything clamps to the stage
+  and move it knows, so the worst case is a car resting for one snapshot interval.
+- **S19 — where a car is drawn** (`components/scene/motion.ts`, tested over a 9-hour run
+  for continuity at every hand-off): store `bay/scan/lift_wait` in the bay; `to_lift`
+  bay → platform; `lift_move/shuttle_wait` on the platform; `handover` the car changes
+  height between platform and shuttle at the shaft; `corridor` on the shuttle; `insert`
+  quarter turn + push into the slot, lowered onto the floor. Retrieve is the mirror
+  (`extract` … `bay_out`, `ready`, `pickup` drives off during the last third). Shuffles
+  reuse the same rules with `shuttle2` marking the source-level phase. Parked cars stay
+  slot colour (S4); a slot mid-slide drops to a pad so the car is never drawn twice.
+- **S20 — surface transfer lane.** Pooled lifts (E1) mean a retrieve may surface in the
+  west shaft and end in an east output bay; the transfer crosses the deck at ground
+  level in the 14 s bay ↔ lift time. A faint lane is drawn across the deck so this reads
+  as designed, not as a glitch.
+- **S21 — VehiclePool.** Three InstancedMeshes (body, cabin, glass) × 40, one unit box
+  scaled per instance — three draw calls for every moving car, no runtime geometry.
+  Three variants (hatchback / sedan / SUV) chosen by a hash of the ticket; oversize cars
+  are longer and taller. Colours: standard `--ink-soft`, EV `--lime`, oversize `--ink`,
+  glass `--data`. The lift plate's top is flush with the level floor, so a car stands at
+  the same height on the platform, the floor and the deck. At most 6 queued cars are
+  drawn on the street west of the input bays; the panel shows the real queue.
+- **S22 — run control lives in the panel from M3** (play/pause, 1×/4×/16×/60×, clock,
+  reset, seed) because M3's DoD needs it; M4 fills the other blocks. The header clock
+  is live and shows `D2` … on later days.
 - **M0** header name "AVP Simulator"; header 48 px, timeline 96 px; English UI; stacked
   layout under 1024 px; TypeScript 5.9 and Next 15.5 pinned.

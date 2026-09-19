@@ -12,6 +12,7 @@ export const SHAFT_LENGTH = 5.8;
 const BAY_PITCH_Z = 3.4;
 const BAY_PITCH_X = 6;
 const BAYS_PER_ROW = 5;
+const QUEUE_PITCH = 5.6;
 
 export interface Shaft {
   id: string; // 'W' | 'E' | 'M1' | 'M2' …
@@ -213,6 +214,15 @@ export function bayPosition(cfg: FacilityConfig, kind: 'bay_in' | 'bay_out', ind
   const offset = 4 + rowIdx * BAY_PITCH_X;
   const x = kind === 'bay_in' ? l.minX - offset : l.maxX + offset;
   return { x, y: 0, z };
+}
+
+/** Where the i-th car waiting for an input bay stands: a lane on the street,
+ *  west of the input bays, heading away from the facility. */
+export function queuePosition(cfg: FacilityConfig, index: number): { x: number; y: number; z: number } {
+  const l = layout(cfg);
+  const bayRows = Math.ceil(cfg.baysIn / BAYS_PER_ROW);
+  const laneStart = l.minX - (4 + bayRows * BAY_PITCH_X) - 3;
+  return { x: laneStart - index * QUEUE_PITCH, y: 0, z: 0 };
 }
 
 export function bounds(cfg: FacilityConfig): { minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number } {

@@ -91,6 +91,8 @@ export interface Job {
   callAt: number;
   finishedAt: number | null;
   resources: JobResources;
+  /** The bay this car used, kept after the bay is released so the scene can finish the transfer animation. */
+  bay: string | null;
   progress: number; // 0..1 within the current stage (filled in snapshots)
   priority: number; // 0 = highest
   prefetch: boolean;
@@ -247,6 +249,8 @@ export interface SimSnapshot {
   day: number; // 0-based
   secondsOfDay: number;
   slots: Slot[];
+  /** Bumps whenever a slot changes: consumers can skip snapshots whose slots are untouched. */
+  slotsVersion: number;
   vehicles: Record<string, Vehicle>;
   jobs: Job[]; // active jobs
   resources: Resource[];

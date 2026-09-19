@@ -12,8 +12,10 @@ pnpm test       # vitest (engine only)
 pnpm build
 pnpm bench --presets A,B,C,D --hours 24 [--demand weekday,stress] [--seed 42]
 
-# scene screenshots / FPS check with headless Chrome (needs `pnpm dev` on :3000)
-DPR=2 node scripts/screenshot.mjs http://localhost:3000/ scripts/shots/presets.js out/
+# scene checks / screenshots with headless Chrome (needs `pnpm dev` on :3000)
+DPR=2 node scripts/screenshot.mjs http://localhost:3000/ scripts/shots/presets.js out/   # camera presets, FPS
+DPR=2 node scripts/screenshot.mjs http://localhost:3000/ scripts/shots/stages.js out/    # a car at every stage
+DPR=2 node scripts/screenshot.mjs http://localhost:3000/ scripts/shots/day60x.js out/    # 24 h at 60× (~24 min)
 ```
 
 Progress and measured numbers: [`STATUS.md`](./STATUS.md). How the spec's open points were

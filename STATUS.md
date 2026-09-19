@@ -8,9 +8,9 @@ Updated after each milestone. Gates: `pnpm lint`, `pnpm typecheck`, `pnpm test`,
 |---|---|---|---|
 | M0 scaffold | ✅ done | `fac7360` | Next 15.5, TS 5.9 strict, Tailwind v4 tokens, Noto Sans Georgian + IBM Plex Mono, layout shell |
 | M1 sim engine | ✅ done | `7f6452a` | pure TS engine, 46 tests, `pnpm bench`; §2 figures reproduced (below) |
-| M2 static 3D | ✅ done | — | geometry from config, InstancedMesh slots, 4 camera presets, level isolation, flyTo |
-| M3 engine ↔ scene | ⬜ next | | snapshot bridge at 20 Hz, vehicle pool, lift/shuttle animation, play/pause/speed |
-| M4 control panel | ⬜ | | §8 blocks 1–9, index table + flyTo, event log, sparklines, timeline strip |
+| M2 static 3D | ✅ done | `74dcca7` | geometry from config, InstancedMesh slots, 4 camera presets, level isolation, flyTo |
+| M3 engine ↔ scene | ✅ done | — | 20 Hz snapshot bridge, render clock, VehiclePool, lift/shuttle/car animation at every stage, run control |
+| M4 control panel | ⬜ next | | §8 blocks 2–9, index table + flyTo, event log, sparklines, timeline strip |
 | M5 versions | ⬜ | | presets A–D in the UI, custom configs, localStorage, share URL, compare mode (worker) |
 | M6 failure & polish | ⬜ | | failure panel, degraded UI, keyboard shortcuts, reduced motion, README, Lighthouse ≥ 95 |
 
@@ -110,6 +110,44 @@ Repeat with `pnpm dev` running:
   the shuttle to the shaft edge. The slot-focus view looks through the ghosted levels
   above — acceptable, revisit once cars are in the scene.
 
+## M3 — engine ↔ scene (what moves)
+
+- `store/useSimStore.ts` owns the loop: `advance(dt)` accumulates `dt × speed`, steps
+  whole ticks (≤ 40 per frame, DECISIONS S17), publishes a snapshot every 50 ms and
+  keeps `clock.t` (sub-tick render time) for the scene. `running`, `speed`
+  (1/4/16/60×), `reset()`, `setSeed()`, `epoch` (bumps per engine).
+- `components/scene/SimDriver.tsx` calls `advance` first in every frame;
+  `motion.ts` (pure, tested) turns a snapshot + `clock.t` into car placements
+  (DECISIONS S19) and lift / shuttle positions via `positionAt`.
+- `VehiclePool.tsx` — 3 InstancedMeshes × 40 (body / cabin / glass, 3 variants);
+  `Shaft.tsx` / `Shuttle.tsx` move their platform / unit per frame from the store; the
+  slot field turns a mid-slide slot into a pad; `SurfaceDeck` gained the transfer lane.
+- Panel block 1 `RunControl` (play / pause, speed, clock, reset, seed); live header clock.
+
+### M3 DoD, measured (headless Chrome 153, Apple M1 / Metal, dpr 1.75)
+
+| check | result |
+|---|---|
+| paused scene is frozen | two viewport captures 1 s apart while paused: byte-identical PNGs (same md5) |
+| every stage animates | `tests/motion.test.ts`: 9 sim-hours of preset B sampled every 2 s — every drawn car in bounds, continuous (≤ 6 m per sample, ≤ 12 m on deck transfers) inside stages *and* across every hand-off; all store/retrieve stages seen |
+| 24 h at 60× without artifacts | `scripts/shots/day60x.js`: 24 sim-hours in 24 min wall, 60 FPS in all 25 one-minute samples, no console errors, no engine warnings; 256 stores + 257 retrieves, store P50 56.1 s / retrieve P50 49.2 s — the same figures as `pnpm bench` (the frame-driven loop stepped exactly the bench's ticks) |
+| gates | lint, typecheck, 51 tests, build green |
+
+Repeat: `DPR=2 node scripts/screenshot.mjs http://localhost:3000/ scripts/shots/{motion,stages,day60x}.js out/`
+(`stages.js` steps the engine to a car mid `to_lift`, `lift_move`, `corridor`, `insert`,
+`extract`, `bay_out` and a full queue and screenshots each).
+
+### Things learned in M3
+
+- A store's bay is released *before* the bay → lift transfer starts; without `Job.bay`
+  the car vanished for 14 s (the continuity test caught it).
+- Retrieves that surface in the west shaft cross the deck to the east output bays
+  (pooled lifts, E1): at 44 m in 14 s it is the fastest thing in the facility. The lane
+  makes it legible; if it ever bothers, the retrieve lift policy is the knob, not the scene.
+- `useStore(selector)` must return stable references at 20 Hz: strings/numbers as keys
+  (`epoch:slotsVersion`, shuttle id lists) and a content-compared `Set` for sliding
+  slots keep React idle while the engine runs.
+
 ## What the engine exposes (for M2–M6)
 
 - `new Engine({ config, demand, seed, devChecks })`, `step()`, `run(seconds)`, `snapshot()`,
@@ -126,6 +164,6 @@ Repeat with `pnpm dev` running:
 
 ## Left to do
 
-Everything from M3 on (table above). Open items that need the user's eye, not code:
+Everything from M4 on (table above). Open items that need the user's eye, not code:
 the header name "AVP Simulator", header/timeline heights (48/96 px), and any decision in
 `DECISIONS.md` they want changed.
