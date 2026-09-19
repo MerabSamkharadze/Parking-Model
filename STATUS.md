@@ -288,5 +288,5 @@ CONFIG_LIMITS`, `lib/format.ts`, and the live `TimelineStrip` (throughput + queu
 Everything in SPEC §10 (M0–M6) and the user's M7 (DECISIONS U1) is done. Open items that
 need the user's eye, not code: the header name "AVP Simulator", header/timeline heights
 (48/96 px), the tour's captions (English, `lib/story.ts`), and any decision in
-`DECISIONS.md` they want changed. Ideas not built: cars driving on the street, a taxi in
-the kerb row (the CC0 bundle has one), sound.
+`DECISIONS.md` they want changed. Ideas not built: a taxi in the kerb row (the CC0 bundle
+has one), pedestrians, sound.
