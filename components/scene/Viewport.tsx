@@ -1,17 +1,19 @@
 'use client';
 
-// SPEC §9: the R3F canvas. dpr [1, 1.75]; frameloop "always" only while the
-// tab is visible. Everything drawn here is derived from the engine snapshot
-// and lib/geometry — the scene never invents state.
+// SPEC §9: the R3F canvas, dpr [1, 1.75]. The frameloop stays "always": the
+// browser already suspends requestAnimationFrame in hidden tabs. Everything
+// drawn here is derived from the engine snapshot and lib/geometry — the scene
+// never invents state.
 
 import { Canvas } from '@react-three/fiber';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { bounds, layout } from '@/lib/geometry';
 import type { FacilityConfig, SimSnapshot } from '@/lib/sim/types';
 import { useSimStore } from '@/store/useSimStore';
 import { useUiStore } from '@/store/useUiStore';
 import { AdaptiveQuality } from './AdaptiveQuality';
-import { CameraRig, cameraGoal } from './CameraRig';
+import { CameraRig, DEFAULT_FOV, cameraGoal } from './CameraRig';
+import { DevHandle } from './DevHandle';
 import { LevelSlab } from './LevelSlab';
 import { Lighting } from './Lighting';
 import { Shaft } from './Shaft';
@@ -19,17 +21,6 @@ import { Shuttle } from './Shuttle';
 import { SlotField } from './SlotField';
 import { SurfaceDeck } from './SurfaceDeck';
 import { readPalette } from './palette';
-
-function usePageVisible(): boolean {
-  const [visible, setVisible] = useState(true);
-  useEffect(() => {
-    const update = () => setVisible(document.visibilityState === 'visible');
-    update();
-    document.addEventListener('visibilitychange', update);
-    return () => document.removeEventListener('visibilitychange', update);
-  }, []);
-  return visible;
-}
 
 function Scene({ cfg, snapshot, shadows, onShadows }: { cfg: FacilityConfig; snapshot: SimSnapshot; shadows: boolean; onShadows: (on: boolean) => void }) {
   const palette = useMemo(() => readPalette(), []);
@@ -63,6 +54,7 @@ function Scene({ cfg, snapshot, shadows, onShadows }: { cfg: FacilityConfig; sna
       ))}
       <CameraRig cfg={cfg} preset={cameraPreset} nonce={cameraNonce} selectedSlotKey={selectedSlotKey} selectedLevel={selectedLevel} />
       <AdaptiveQuality onShadows={onShadows} />
+      {process.env.NODE_ENV !== 'production' && <DevHandle />}
     </>
   );
 }
@@ -70,16 +62,14 @@ function Scene({ cfg, snapshot, shadows, onShadows }: { cfg: FacilityConfig; sna
 export function Viewport() {
   const cfg = useSimStore((s) => s.config);
   const snapshot = useSimStore((s) => s.snapshot);
-  const visible = usePageVisible();
   const [shadows, setShadows] = useState(true);
   const initial = useMemo(() => cameraGoal(cfg, 'isometric', null, null), [cfg]);
   if (!snapshot) return null;
   return (
     <Canvas
       dpr={[1, 1.75]}
-      frameloop={visible ? 'always' : 'never'}
       shadows
-      camera={{ fov: 40, near: 0.5, far: 600, position: initial.pos.toArray() }}
+      camera={{ fov: DEFAULT_FOV, near: 0.5, far: 600, position: initial.pos.toArray() }}
       gl={{ antialias: true, powerPreference: 'high-performance' }}
       className="touch-none"
     >
