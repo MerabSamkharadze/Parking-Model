@@ -33,6 +33,9 @@ const DEFRAG_HOUR = 3;
 const DEFRAG_MAX_MOVES = 30;
 const DEFRAG_UTIL_LIMIT = 0.2;
 const QUEUE_SAMPLE_TICKS = 10;
+/** Idle shuttles wait at the next expected departure on their level if it is this close. */
+const SHUTTLE_ANTICIPATE_SECONDS = 20 * 60;
+const SHUTTLE_REST_REFRESH_TICKS = 100; // rest targets are recomputed every 10 s of sim time
 
 const IN_TRANSIT: ReadonlySet<JobStage> = new Set<JobStage>([
   'to_lift',
@@ -128,6 +131,8 @@ export class Engine {
   private spareTarget: string | null = null;
   private lastDefragDay = -1;
   private liftCycleCount = 0;
+  private shuttleRestCache = new Map<string, number>();
+  private shuttleRestTick = -1;
 
   constructor(opts: EngineOptions) {
     this.cfg = opts.config;
@@ -187,11 +192,13 @@ export class Engine {
 
   private seedResidents(): void {
     const n = scaledResidents(this.demandProfile, this.cfg);
-    for (let i = 0; i < n; i++) {
+    let placed = 0;
+    for (let attempt = 0; placed < n && attempt < n * 2; attempt++) {
       const v = this.demand.makeVehicle(this.ticket(), 'resident', 0);
       v.habitualDeparture = this.demand.habitualDeparture();
       const slot = this.allocate(v);
-      if (!slot) break;
+      if (!slot) continue; // e.g. no EV slot left for an EV resident
+      placed++;
       this.vehicles.set(v.id, v);
       this.slots[this.slotByKey.get(slot.key)!] = { ...slot, state: 'occupied', vehicleId: v.id };
       v.slotKey = slot.key;
@@ -208,25 +215,39 @@ export class Engine {
   // ---- host interface for the job machine ---------------------------------
 
   private host(): JobHost {
-    const engine = this;
-    return {
-      cfg: this.cfg,
-      rm: this.rm,
-      rng: this.rng,
-      get t() {
-        return engine.t;
-      },
-      slot: (key) => this.getSlot(key),
-      patchSlot: (key, patch) => this.patchSlot(key, patch),
-      vehicle: (id) => this.getVehicle(id),
-      log: (kind, text, extra) => this.log(kind, text, extra),
-      onStoreDone: (job, seconds) => this.onStoreDone(job, seconds),
-      onRetrieveReady: (job, seconds) => this.onRetrieveReady(job, seconds),
-      onRetrieveDone: (job) => this.onRetrieveDone(job),
-      onShuffleDone: () => {
-        this.completedShuffle++;
-      },
-    };
+    return new EngineHost(this);
+  }
+
+  /** @internal accessors used by EngineHost */
+  _hostSlot(key: string): Slot {
+    return this.getSlot(key);
+  }
+  _hostPatchSlot(key: string, patch: Partial<Slot>): void {
+    this.patchSlot(key, patch);
+  }
+  _hostVehicle(id: string): Vehicle {
+    return this.getVehicle(id);
+  }
+  _hostLog(kind: EventKind, text: string, extra?: { vehicleId?: string; slotKey?: string; seconds?: number }): void {
+    this.log(kind, text, extra);
+  }
+  _hostStoreDone(job: Job, seconds: number): void {
+    this.onStoreDone(job, seconds);
+  }
+  _hostRetrieveReady(job: Job, seconds: number): void {
+    this.onRetrieveReady(job, seconds);
+  }
+  _hostRetrieveDone(job: Job): void {
+    this.onRetrieveDone(job);
+  }
+  _hostShuffleDone(): void {
+    this.completedShuffle++;
+  }
+  get rngStream(): Rng {
+    return this.rng;
+  }
+  get rm_(): ResourceManager {
+    return this.rm;
   }
 
   private getSlot(key: string): Slot {
@@ -539,11 +560,26 @@ export class Engine {
     job.frozen = true;
     job.stageStartedAt += dt;
     if (Number.isFinite(job.stageEndsAt)) job.stageEndsAt += dt;
-    for (const id of Object.values(job.resources)) if (id) this.rm.shiftMove(this.rm.get(id), dt, this.t);
+    const r = job.resources;
+    if (r.bay) this.rm.shiftMove(this.rm.get(r.bay), dt, this.t);
+    if (r.lift) this.rm.shiftMove(this.rm.get(r.lift), dt, this.t);
+    if (r.shuttle) this.rm.shiftMove(this.rm.get(r.shuttle), dt, this.t);
+    if (r.shuttle2) this.rm.shiftMove(this.rm.get(r.shuttle2), dt, this.t);
   }
 
   private isFrozen(job: Job): boolean {
-    for (const id of Object.values(job.resources)) if (id && this.rm.get(id).down) return true;
+    if (!this.anyDown) return false;
+    const r = job.resources;
+    return (
+      (!!r.bay && this.rm.get(r.bay).down) ||
+      (!!r.lift && this.rm.get(r.lift).down) ||
+      (!!r.shuttle && this.rm.get(r.shuttle).down) ||
+      (!!r.shuttle2 && this.rm.get(r.shuttle2).down)
+    );
+  }
+
+  private get anyDown(): boolean {
+    for (const r of this.rm.resources) if (r.down) return true;
     return false;
   }
 
@@ -627,7 +663,31 @@ export class Engine {
         liftTarget.set(r.id, p.level + 1);
       } else liftTarget.set(r.id, 0);
     });
-    this.rm.parkIdle(t, (r) => (r.kind === 'lift' ? (liftTarget.get(r.id) ?? 0) : this.rm.zoneCentre(r.zone ?? 0)));
+    this.rm.parkIdle(t, (r) => (r.kind === 'lift' ? (liftTarget.get(r.id) ?? 0) : this.shuttleRest(r.level ?? 0, r.zone ?? 0, t)));
+  }
+
+  /**
+   * Rest position of an idle shuttle: the column of the parked car on its
+   * level/zone with the earliest planned departure, when that departure is
+   * near (the system knows dwell targets, SPEC §3/§4.4); otherwise the zone
+   * centre. Targets are recomputed every 10 s of sim time.
+   */
+  private shuttleRest(level: number, zone: number, t: number): number {
+    if (this.tick - this.shuttleRestTick >= SHUTTLE_REST_REFRESH_TICKS) {
+      this.shuttleRestTick = this.tick;
+      const best = new Map<string, Vehicle>();
+      for (const v of this.vehicles.values()) {
+        if (v.state !== 'parked' || !v.slotKey || v.plannedDeparture === null) continue;
+        if (v.plannedDeparture - t > SHUTTLE_ANTICIPATE_SECONDS) continue;
+        const id = parseSlotKey(v.slotKey);
+        const key = `${id.level}:${zoneOfCol(this.cfg, id.col)}`;
+        const cur = best.get(key);
+        if (!cur || v.plannedDeparture < cur.plannedDeparture!) best.set(key, v);
+      }
+      this.shuttleRestCache.clear();
+      for (const [key, v] of best) this.shuttleRestCache.set(key, slotX(this.cfg, parseSlotKey(v.slotKey!).col));
+    }
+    return this.shuttleRestCache.get(`${level}:${zone}`) ?? this.rm.zoneCentre(zone);
   }
 
   private spareCheck(): void {
@@ -806,5 +866,48 @@ export class Engine {
 
   slotIdOf(key: string) {
     return parseSlotKey(key);
+  }
+}
+
+/** The job machine's view of the engine (SPEC §4: the machine never sees React or the scene). */
+class EngineHost implements JobHost {
+  readonly cfg: FacilityConfig;
+  readonly rm: ResourceManager;
+  readonly rng: Rng;
+  private readonly engine: Engine;
+
+  constructor(engine: Engine) {
+    this.engine = engine;
+    this.cfg = engine.cfg;
+    this.rm = engine.rm_;
+    this.rng = engine.rngStream;
+  }
+
+  get t(): number {
+    return this.engine.t;
+  }
+  slot(key: string): Slot {
+    return this.engine._hostSlot(key);
+  }
+  patchSlot(key: string, patch: Partial<Slot>): void {
+    this.engine._hostPatchSlot(key, patch);
+  }
+  vehicle(id: string): Vehicle {
+    return this.engine._hostVehicle(id);
+  }
+  log(kind: EventKind, text: string, extra?: { vehicleId?: string; slotKey?: string; seconds?: number }): void {
+    this.engine._hostLog(kind, text, extra);
+  }
+  onStoreDone(job: Job, seconds: number): void {
+    this.engine._hostStoreDone(job, seconds);
+  }
+  onRetrieveReady(job: Job, seconds: number): void {
+    this.engine._hostRetrieveReady(job, seconds);
+  }
+  onRetrieveDone(job: Job): void {
+    this.engine._hostRetrieveDone(job);
+  }
+  onShuffleDone(): void {
+    this.engine._hostShuffleDone();
   }
 }

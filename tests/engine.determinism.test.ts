@@ -16,8 +16,8 @@ function digest(seed: number, hours: number) {
 
 describe('engine determinism (SPEC §4.1)', () => {
   it('same seed + config → identical metrics, events and slot state', () => {
-    const a = digest(42, 8);
-    const b = digest(42, 8);
+    const a = digest(42, 12);
+    const b = digest(42, 12);
     expect(a.metrics).toEqual(b.metrics);
     expect(a.events).toEqual(b.events);
     expect(a.slots).toEqual(b.slots);

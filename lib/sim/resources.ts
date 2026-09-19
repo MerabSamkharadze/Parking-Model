@@ -48,6 +48,7 @@ export interface Grant {
 export class ResourceManager {
   readonly resources: ResourceState[] = [];
   private readonly byId = new Map<string, ResourceState>();
+  private readonly byKind: Record<ResourceKind, ResourceState[]> = { bay_in: [], bay_out: [], lift: [], shuttle: [] };
   private pending: Request[] = [];
   private seq = 0;
   private lastBucketMinute = 0;
@@ -84,6 +85,7 @@ export class ResourceManager {
     };
     this.resources.push(r);
     this.byId.set(r.id, r);
+    this.byKind[r.kind].push(r);
   }
 
   get(id: string): ResourceState {
@@ -93,7 +95,7 @@ export class ResourceManager {
   }
 
   ofKind(kind: ResourceKind): ResourceState[] {
-    return this.resources.filter((r) => r.kind === kind);
+    return this.byKind[kind];
   }
 
   shuttleFor(level: number, zone: number): ResourceState {
@@ -145,8 +147,8 @@ export class ResourceManager {
 
   private candidates(w: Want, taken: Set<string>): ResourceState[] {
     const out: ResourceState[] = [];
-    for (const r of this.resources) {
-      if (r.kind !== w.kind || r.busyWith || r.down || taken.has(r.id)) continue;
+    for (const r of this.byKind[w.kind]) {
+      if (r.busyWith || r.down || taken.has(r.id)) continue;
       if (w.level !== undefined && r.level !== w.level) continue;
       if (w.zone !== undefined && r.zone !== w.zone) continue;
       if (w.only !== undefined && r.id !== w.only) continue;
@@ -160,8 +162,22 @@ export class ResourceManager {
     const grants: Grant[] = [];
     if (!this.dirty) return grants;
     this.dirty = false;
+    // free resources per kind: lets a long queue for a busy kind be skipped in O(1) per request
+    const free: Record<ResourceKind, number> = { bay_in: 0, bay_out: 0, lift: 0, shuttle: 0 };
+    for (const r of this.resources) if (!r.busyWith && !r.down) free[r.kind]++;
     const remaining: Request[] = [];
     for (const req of this.pending) {
+      let possible = true;
+      for (const w of req.wants) {
+        if (free[w.kind] === 0) {
+          possible = false;
+          break;
+        }
+      }
+      if (!possible) {
+        remaining.push(req);
+        continue;
+      }
       const taken = new Set<string>();
       const chosen: ResourceState[] = [];
       let ok = true;
@@ -191,7 +207,10 @@ export class ResourceManager {
         remaining.push(req);
         continue;
       }
-      for (const r of chosen) this.acquire(r, req.jobId, t);
+      for (const r of chosen) {
+        this.acquire(r, req.jobId, t);
+        free[r.kind]--;
+      }
       grants.push({ jobId: req.jobId, resources: chosen, waited: t - req.createdAt });
     }
     this.pending = remaining;
@@ -302,7 +321,9 @@ export class ResourceManager {
   utilization(r: ResourceState, t: number): number {
     let sum = 0;
     for (const b of r.buckets) sum += b;
-    const span = Math.min(t, WINDOW_MINUTES * 60);
+    const minute = Math.floor(t / 60);
+    const fullBuckets = Math.min(WINDOW_MINUTES - 1, minute);
+    const span = fullBuckets * 60 + (t - minute * 60);
     return span > 0 ? Math.min(1, sum / span) : 0;
   }
 

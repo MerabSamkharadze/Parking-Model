@@ -49,7 +49,7 @@ export const PROFILES: Record<DemandProfile['name'], DemandProfile> = {
     name: 'stress',
     residents: 96,
     hourly: hourly(
-      [1, 0, 0, 0, 0, 0, 1, 2, 4, 6, 8, 8, 8, 8, 8, 8, 8, 10, 20, 120, 30, 8, 4, 1],
+      [1, 0, 0, 0, 0, 0, 1, 2, 4, 6, 8, 8, 8, 8, 8, 8, 8, 10, 12, 40, 20, 8, 4, 1],
       [0, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     ),
     visitorDwell: [60, 180],
@@ -76,6 +76,8 @@ export function scaledResidents(profile: DemandProfile, cfg: FacilityConfig): nu
 }
 
 const LETTERS = 'ABCDEFGHJKLMNOPQRSTUVWXYZ';
+/** Residents charge at home less often than visitors need a charger. */
+const RESIDENT_EV_FACTOR = 0.6;
 
 /** Vehicle factory + arrival sampling; all randomness from the seeded rng. */
 export class DemandGenerator {
@@ -160,7 +162,8 @@ export class DemandGenerator {
 
   makeVehicle(id: string, tenant: Tenant, t: number): Vehicle {
     const r = this.rng.next();
-    const cls: SlotClass = r < this.profile.oversizeShare ? 'oversize' : r < this.profile.oversizeShare + this.profile.evShare ? 'ev' : 'standard';
+    const evShare = tenant === 'resident' ? this.profile.evShare * RESIDENT_EV_FACTOR : this.profile.evShare;
+    const cls: SlotClass = r < this.profile.oversizeShare ? 'oversize' : r < this.profile.oversizeShare + evShare ? 'ev' : 'standard';
     const profile = this.profileFor(cls, cls === 'ev');
     return {
       id,

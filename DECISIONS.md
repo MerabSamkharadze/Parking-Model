@@ -56,6 +56,15 @@ will be adjusted.
     takes {shuttle, lift} atomically, a retrieve takes shuttle → lift → bay_out, a
     shuffle takes {shuttle A, shuttle B, lift} atomically. No job ever waits for a
     lower-ranked resource while holding a higher one, so no cycle can form.
+  - **Idle positioning** (needed to reach the §2 figures — see STATUS.md): an idle lift
+    returns to the surface; when two or more lifts are idle, the spare ones pre-position
+    toward a level with a retrieve in progress. An idle shuttle waits at the column of the
+    parked car on its level with the earliest planned departure (the system knows dwell
+    targets — the same knowledge `dwell-aware` and pre-fetch use) when that departure is
+    within 20 min, otherwise at the centre of its zone. Idle moves are interruptible.
+  - A retrieve may use any free lift its zone can reach (`any` policy). Restricting it to
+    the nearest shaft was measured: +3 % lift capacity, but retrieve P95 under stress
+    rises from ~100 s to ~140 s, so `any` stays.
 - **E5 — job stages.** The §3 list is kept and extended so that every wait is explicit and
   the renderer never guesses: `queued, bay, scan, lift_wait, to_lift, lift_move,
   shuttle_wait, handover, corridor, insert, extract, corridor_out, lift_up, bay_wait,
@@ -69,8 +78,11 @@ will be adjusted.
   `residentDwell`). Visitors leave after `visitorDwell`. The sim starts at 00:00 with
   `residents` cars parked (via the active allocator, cold zone under `zoned`) and runs
   day after day with the same profile. `stress` = every resident leaves 08:00–09:00 and
-  returns 18:30–20:00, plus a visitor spike at 19:00. Full tables are in
-  `lib/sim/demand.ts`. Arrivals are EV with `evShare` and oversize with `oversizeShare`.
+  returns 18:55–19:10, plus a visitor spike at 19:00. Full tables are in
+  `lib/sim/demand.ts`. Arrivals are EV with `evShare` (residents 0.6 × that — EV slots are
+  10 % of the field and residents charge at home) and oversize with `oversizeShare`.
+  Residents and visitor rates scale with `slots / 144` so presets A–D see comparable
+  demand intensity (A: 64 residents, C: 213).
 - **E10 — slot mix.** Preset B: 10 % EV, 4 % oversize (per level: 2 EV slots at the two
   columns nearest the W shaft, 1 oversize slot at the far column). EV cars need an EV
   slot and oversize cars an oversize slot — otherwise `REJECT`. A standard car takes a
@@ -81,11 +93,15 @@ will be adjusted.
   rejected (`REJECT #id full`) and counted in `metrics.rejected`.
 - **E12 — nearest.** Cost is in seconds: `level × 2.2 + columns-from-nearest-shaft × 1.625`
   (pitch ÷ shuttle speed). Ties → lower level, lower column.
-- **E13 — pre-fetch.** A retrieve is created `prefetchLeadMinutes` before the planned
-  departure (the driver's app signal). The car waits in an output bay (`ready` stage). To
-  keep bays for on-demand retrieves, a pre-fetch may only take an output bay while at
-  least one other output bay stays free. Retrieve time is measured from the planned
-  departure (driver arrival) to ready-in-bay, so a successful pre-fetch scores 0 s.
+- **E13 — pre-fetch.** The app signal arrives `prefetchLeadMinutes` before the planned
+  departure. The engine does **not** fetch the car immediately (measured: cars fetched
+  15 min early fill the three output bays, later cars wait on the lift and lift capacity
+  collapses from 215 to 51 movements/h). Instead it starts the retrieve just in time —
+  at `planned − (nominal retrieve duration for that slot × 1.15 + 12 s)` — and admits at
+  most `baysOut − 1` pre-fetched cars at once, so one bay always stays for on-demand
+  retrieves. The car waits in the bay (`ready` stage) for the driver. Retrieve time is
+  measured from the planned departure (driver arrival) to ready-in-bay, so a successful
+  pre-fetch scores 0 s (measured: P50 0 s, P90 10 s, P95 38 s with a 10-min lead).
 - **E14 — night defrag.** At 03:00, if 15-min lift utilisation < 20 % and `nightDefrag`
   is on: up to 30 `shuffle` jobs move the cars with the earliest planned departures to
   free slots with a lower `nearest` cost (upper level / nearer shaft). Pre-fetch and

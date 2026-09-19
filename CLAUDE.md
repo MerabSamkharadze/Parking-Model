@@ -12,3 +12,7 @@
 
 - Ask before installing any dependency that is not listed in SPEC §1.
 - The 3D scene only visualises engine state; animation is never a source of truth (SPEC §0.3).
+- Gaps and contradictions in the spec are resolved in `DECISIONS.md` (one entry per id); progress
+  and measured numbers live in `STATUS.md`. Update both at the end of every milestone.
+- Engine code is erasable-syntax TypeScript with explicit `.ts` imports and `import type`, so
+  `pnpm bench` runs on Node's built-in type stripping without extra dependencies.
