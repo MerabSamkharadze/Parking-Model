@@ -13,8 +13,15 @@ import { LABEL_FONT } from './SurfaceDeck';
 import type { Palette } from './palette';
 
 export const GHOST_OPACITY = 0.15;
+/** Levels above the isolated one sit between the camera and it: ghosted harder. */
+export const GHOST_ABOVE_OPACITY = 0.06;
 
-export function LevelSlab({ cfg, level, palette, dimmed }: { cfg: FacilityConfig; level: number; palette: Palette; dimmed: boolean }) {
+export function ghostOpacity(level: number, selectedLevel: number | null): number {
+  if (selectedLevel === null || level === selectedLevel) return 1;
+  return level < selectedLevel ? GHOST_ABOVE_OPACITY : GHOST_OPACITY;
+}
+
+export function LevelSlab({ cfg, level, palette, dimmed, opacity = GHOST_OPACITY }: { cfg: FacilityConfig; level: number; palette: Palette; dimmed: boolean; opacity?: number }) {
   const lay = useMemo(() => layout(cfg), [cfg]);
   const depth = cfg.corridorWidth + 2 * cfg.slotDepth;
   const y = levelY(cfg, level);
@@ -31,7 +38,7 @@ export function LevelSlab({ cfg, level, palette, dimmed }: { cfg: FacilityConfig
 
   // Opacity is set imperatively so isolation never re-creates materials.
   useEffect(() => {
-    const o = dimmed ? GHOST_OPACITY : 1;
+    const o = dimmed ? opacity : 1;
     for (const m of slabMats.current) {
       if (!m) continue;
       m.transparent = dimmed;
@@ -45,7 +52,7 @@ export function LevelSlab({ cfg, level, palette, dimmed }: { cfg: FacilityConfig
       m.opacity = o;
       m.needsUpdate = true;
     }
-  }, [dimmed]);
+  }, [dimmed, opacity]);
 
   return (
     <group>

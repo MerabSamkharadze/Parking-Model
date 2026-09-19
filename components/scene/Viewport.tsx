@@ -22,8 +22,9 @@ import { Context } from './Context';
 import { DevHandle } from './DevHandle';
 import { EnvironmentLight } from './EnvironmentLight';
 import { Ground } from './Ground';
-import { LevelSlab } from './LevelSlab';
+import { LevelSlab, ghostOpacity } from './LevelSlab';
 import { ParkedCars } from './ParkedCars';
+import { Pit } from './Pit';
 import { Lighting } from './Lighting';
 import { Shaft } from './Shaft';
 import { Shuttle } from './Shuttle';
@@ -99,11 +100,12 @@ function Scene({ cfg, shadows, onShadows }: { cfg: FacilityConfig; shadows: bool
       <SimDriver />
       <Lighting palette={palette} shadows={shadows} extent={extent} />
       <Ground cfg={cfg} palette={palette} />
+      <Pit cfg={cfg} />
       <SurfaceDeck cfg={cfg} palette={palette} />
       <Bays cfg={cfg} palette={palette} />
       <Structure cfg={cfg} palette={palette} />
       {Array.from({ length: cfg.levels }, (_, level) => (
-        <LevelSlab key={level} cfg={cfg} level={level} palette={palette} dimmed={selectedLevel !== null && selectedLevel !== level} />
+        <LevelSlab key={level} cfg={cfg} level={level} palette={palette} dimmed={selectedLevel !== null && selectedLevel !== level} opacity={ghostOpacity(level, selectedLevel)} />
       ))}
       {slots && <SlotField cfg={cfg} slots={slots} palette={palette} selectedLevel={selectedLevel} sliding={sliding} onPick={flyTo} />}
       <SlotMarker cfg={cfg} slotKey={selectedSlotKey} palette={palette} />

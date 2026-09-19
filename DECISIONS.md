@@ -87,7 +87,9 @@ will be adjusted.
   columns nearest the W shaft, 1 oversize slot at the far column). EV cars need an EV
   slot and oversize cars an oversize slot — otherwise `REJECT`. A standard car takes a
   standard slot first, then an EV slot, then an oversize slot (last resort). Oversize =
-  length > 5.3 m or height > 1.65 m or width > 2.05 m.
+  length > 4.75 m or height > 1.62 m or width > 2.05 m (revised with S39/S40: every
+  generated car fits a 5.2 m slot with the parking margin and rides the 0.2 m shuttle
+  deck under the 1.9 m clear height; standard 4.0–4.75 × ≤ 1.62 m, oversize ≤ 5.0 × ≤ 1.68 m).
 - **E11 — zoned overflow.** `zoned` spills to the other zone when the preferred zone has
   no compatible free slot. When the whole facility has no compatible slot, the arrival is
   rejected (`REJECT #id full`) and counted in `metrics.rejected`.
@@ -320,3 +322,57 @@ will be adjusted.
   app opens under the mall (`setting: 'mall'`), not in a void.
 - **M0** header name "AVP Simulator"; header 48 px, timeline 96 px; English UI; stacked
   layout under 1024 px; TypeScript 5.9 and Next 15.5 pinned.
+
+## Review fixes (2026-09-19, after the comprehension / realism / physics review)
+
+- **S39 — level height is clear height.** SPEC §2 "level height 1.9 m (nobody goes
+  inside)" is headroom, not the floor-to-floor pitch: `geometry.ts › levelPitch` =
+  `levelHeight + SLAB_THICKNESS (0.22)`, so L1's floor is at −2.12 m and preset B is
+  12.7 m deep. Supersedes S3's reading. The lift timing is per level, so nothing in §2's
+  derived figures moves. Before this, the clear height was 1.68 m and every car on a
+  shuttle (0.3 m) pierced the slab above.
+- **S40 — the quarter turn happens in the corridor, the push is straight.** The old
+  `slideSlot` rotated the car while sliding it in: with a 2.6 m pitch and a 3.6 m
+  corridor the swept rectangle passed through both neighbours from k ≈ 0.28 and through
+  the corridor posts (turning circle 4.6–5.3 m). Now the car turns in place at the
+  corridor centre for the first half of the 11 s and is pushed in during the second
+  half. The turn reaches (half-diagonal − 1.8 m) into the slot mouths on both rows —
+  sedan 0.50, SUV 0.56, oversize 0.69 m — so parked cars stand at the back of the slot
+  (`parkedZ`, rear 0.15 m from the outer edge: 0.83 / 0.84 / 0.59 m of free mouth), the
+  inner rack posts moved 1.3 m into the slots (outside the circle), and the oversize
+  scale dropped 1.12 → 1.06. The shuttle deck is 0.2 m (comb height) and its telescopic
+  comb arm is drawn under the car during the push / pull.
+- **S41 — shuttles dock outside the shaft.** The engine still drives a shuttle to the
+  shaft centre; the scene holds it at `shuttleDockX` (shaft edge + 0.25 m, field side) and
+  the 6 s handover slides the car along the comb arm between the platform (top flush with
+  the floor) and the deck. The platform no longer descends through a waiting shuttle and
+  the car no longer sinks through the shuttle body. Lifts and shuttles move on a
+  trapezoidal speed profile (`ResourceMove.ramp`: lift 1.5 s, shuttle v/a = 2 s;
+  symmetric, so the midpoint is still reached at half time) — engine and scene share
+  `positionAt`, as before.
+- **S42 — surface transfer is a trolley on the lane.** `bayToLift` follows an L: bay →
+  transfer lane (z = 0) → shaft, at constant speed over the 14 s, and an amber deck
+  trolley is drawn under the car. Pooled lifts (E1) are kept: a west-bay store to the E
+  lift is still a 48 m / 14 s ride (3.4 m/s) — fast, but now a visible machine on a
+  visible lane, not a car gliding over the roof.
+- **S43 — entry cabin.** The shaft head at street level is a 2.6 m cabin (glazed sides
+  open towards the lane, roof, light bar) instead of an open platform in the street.
+- **S44 — what the surface hides.** `Ground.tsx › lidTarget`: the lid clears (12 %) for
+  the section views, for the slot view, and for the follow camera whenever the followed
+  car is below the surface — the tour's "Down the shaft" / "Into the slot" / "Call it
+  back" steps and index → flyTo on L3–L5 previously showed asphalt. The ground *around*
+  the pit never drops below 55 % (street cars stood on nothing in the dollhouse view);
+  opacity changes ease over ~0.5 s. Slabs above an isolated level ghost at 6 %, below at
+  15 %. The follow camera keeps to the corridor side away from the car's shaft
+  (`followed.side`), so it never looks down through a lift platform. Post tops end 2 cm
+  under the lid.
+- **S45 — the pit.** `Pit.tsx`: 0.4 m retaining walls on four sides (0.6 m clear of the
+  rack, down to a 0.45 m base slab), a 34 m ground mass behind every wall and under the
+  base. Dollhouse rule: only the two walls on the far side of the camera are drawn.
+- **S46 — under the building, literally.** Mall and tower start their solid block 12 m
+  behind the pavement and add a ghosted wing (10 % + edges) over the pit, so "under a
+  shopping centre / office tower" is what is drawn; moving the blocks back also takes the
+  mall canopy out of the north-row slot views. The courtyard block moved back the same way.
+- **S47 — the elapsed-time test is a smoke check.** `engine.timings.test.ts` asserts a
+  day in < 20 s (was < 3 s: it failed whenever the machine was busy). Bench numbers live
+  in STATUS.md, not in a test.

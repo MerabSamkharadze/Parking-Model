@@ -14,7 +14,8 @@ import { COMPARE_HOURS, COMPARE_MAX, COMPARE_MIN, rowOf, type CompareCandidate, 
 import { History } from '@/lib/history';
 import { PRESETS, deriveConfig, presetById, type ConfigPatch } from '@/lib/presets';
 import { SHARE_PARAM, decodeSetup, deleteVersion, loadVersions, saveVersion, shareUrl, type SavedVersion, type Setup, type StorageLike } from '@/lib/share';
-import { PROFILES, profileByName } from '@/lib/sim/demand';
+import { slotCount } from '@/lib/geometry';
+import { PROFILES, demandScale, profileByName } from '@/lib/sim/demand';
 import { Engine, TICK } from '@/lib/sim/engine';
 import type { DemandProfile, FacilityConfig, Resource, SimSnapshot } from '@/lib/sim/types';
 import type { BenchRequest, BenchResponse } from '@/workers/bench.worker';
@@ -24,6 +25,29 @@ export type Speed = (typeof SPEEDS)[number];
 export const MAX_TICKS_PER_FRAME = 40;
 export const SNAPSHOT_INTERVAL_MS = 50; // 20 Hz
 export const PANEL_INTERVAL_MS = 500; // 2 Hz
+/** The PRNG takes a 32-bit seed; the field never holds more than that. */
+export const SEED_MAX = 4294967295;
+
+/** An integer seed 0…SEED_MAX; anything unparseable falls back. */
+export function clampSeed(n: number, fallback = 42): number {
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(SEED_MAX, Math.max(0, Math.round(n)));
+}
+
+/**
+ * The largest "residents per 144 slots" value that still changes anything:
+ * `scaledResidents` (lib/sim/demand.ts) caps the cars parked at 00:00 at
+ * slots − 4, so a higher figure parks the same cars and only misleads.
+ */
+export function residentsCap(cfg: FacilityConfig): number {
+  return Math.max(0, Math.floor((slotCount(cfg) - 4) / demandScale(cfg)));
+}
+
+/** An integer residents count 0…residentsCap(cfg); unparseable → fallback. */
+export function clampResidents(n: number, cfg: FacilityConfig, fallback = 0): number {
+  if (!Number.isFinite(n)) return clampResidents(fallback, cfg, 0);
+  return Math.min(residentsCap(cfg), Math.max(0, Math.round(n)));
+}
 
 export interface RenderClock {
   /** Sim seconds including the fraction of a tick not yet stepped. */
@@ -71,12 +95,19 @@ interface SimState {
   // --- commands (SPEC §8.5) ---
   /** Returns the new vehicle's id (null when the arrival was rejected). */
   addVehicle: (tenant?: 'visitor' | 'resident') => string | null;
-  callVehicle: (vehicleId?: string) => void;
+  /** Calls a parked car (default: the earliest planned departure); false when nothing could be called. */
+  callVehicle: (vehicleId?: string) => boolean;
   // --- failures (SPEC §8.10, §4.5) ---
   setFailure: (kind: 'lift' | 'shuttle' | 'power', id: string | null, down: boolean) => void;
   recoverAll: () => void;
   // --- saved versions, share, compare (SPEC §5, M5) ---
   versions: SavedVersion[];
+  /**
+   * The saved version the running setup is: set by save / load, cleared by
+   * any change to the setup (preset, facility, strategy, demand, seed). The
+   * version list marks this row instead of comparing config objects.
+   */
+  activeVersionId: string | null;
   /** Reads `?v=` and localStorage once, before the first engine (client only). */
   boot: () => void;
   saveCurrent: (label: string) => void;
@@ -94,6 +125,32 @@ export interface CompareState {
   rows: CompareRow[];
   elapsedMs: number | null;
   error: string | null;
+  /** The day the rows were computed for (null until a run finishes). */
+  setup: CompareSetup | null;
+}
+
+/** What a compare run was computed with, to tell stale results from current ones. */
+export interface CompareSetup {
+  demandName: DemandProfile['name'];
+  residents: number;
+  seed: number;
+  /** The running config when the unsaved custom setup was one of the candidates, else null. */
+  currentConfig: FacilityConfig | null;
+}
+
+const NO_COMPARE: CompareState = { running: false, rows: [], elapsedMs: null, error: null, setup: null };
+
+/**
+ * Why a compare table no longer describes the setup on screen — a short note
+ * for the badge over the table, or null while the results are current.
+ */
+export function compareStaleNote(setup: CompareSetup | null, now: { demand: DemandProfile; seed: number; config: FacilityConfig }): string | null {
+  if (!setup) return null;
+  if (setup.currentConfig && setup.currentConfig !== now.config) return 'results for an earlier custom setup';
+  if (setup.demandName !== now.demand.name || setup.residents !== now.demand.residents || setup.seed !== now.seed) {
+    return `results for ${setup.demandName} · ${setup.residents} residents · seed ${setup.seed}`;
+  }
+  return null;
 }
 
 function storage(): StorageLike | null {
@@ -170,7 +227,7 @@ export const useSimStore = create<SimState>((set, get) => {
       create_();
     },
     setSeed: (seed) => {
-      set({ seed });
+      set({ seed: clampSeed(seed), activeVersionId: null });
       create_();
     },
     setRunning: (running) => set({ running }),
@@ -199,16 +256,16 @@ export const useSimStore = create<SimState>((set, get) => {
     setPreset: (id) => {
       const preset = presetById(id);
       if (!preset) return;
-      set({ config: preset });
+      set({ config: preset, activeVersionId: null });
       create_();
     },
     applyFacility: (patch) => {
-      set((s) => ({ config: deriveConfig(s.config, patch) }));
+      set((s) => ({ config: deriveConfig(s.config, patch), activeVersionId: null }));
       create_();
     },
     setStrategy: (patch) => {
       const { engine } = get();
-      set((s) => ({ config: deriveConfig(s.config, patch) }));
+      set((s) => ({ config: deriveConfig(s.config, patch), activeVersionId: null }));
       if (!engine) return;
       if (patch.allocator !== undefined) engine.setAllocator(patch.allocator);
       if (patch.prefetchLeadMinutes !== undefined) engine.setPrefetchLead(patch.prefetchLeadMinutes);
@@ -216,32 +273,35 @@ export const useSimStore = create<SimState>((set, get) => {
       get().setSnapshot(engine.snapshot());
     },
     setDemandProfile: (name) => {
-      set({ demand: profileByName(name) });
+      set({ demand: profileByName(name), activeVersionId: null });
       create_();
     },
     setResidents: (residents) => {
-      set((s) => ({ demand: { ...s.demand, residents: Math.max(0, Math.round(residents)) } }));
+      set((s) => ({ demand: { ...s.demand, residents: clampResidents(residents, s.config, s.demand.residents) }, activeVersionId: null }));
       create_();
     },
     versions: [],
+    activeVersionId: null,
     boot: () => {
       if (typeof window === 'undefined') return;
       const shared = decodeSetup(new URLSearchParams(window.location.search).get(SHARE_PARAM));
       const versions = loadVersions(storage());
       if (shared) {
-        set({ config: shared.config, demand: { ...PROFILES[shared.demandName], residents: shared.residents }, seed: shared.seed, versions });
+        set({ config: shared.config, demand: { ...PROFILES[shared.demandName], residents: clampResidents(shared.residents, shared.config) }, seed: shared.seed, versions, activeVersionId: null });
       } else set({ versions });
     },
     saveCurrent: (label) => {
       const { config, demand, seed, versions } = get();
       const setup: Setup = { config, demandName: demand.name, residents: demand.residents, seed };
-      set({ versions: saveVersion(storage(), versions, setup, label) });
+      const next = saveVersion(storage(), versions, setup, label);
+      // newest first: the entry just written is the running setup
+      set({ versions: next, activeVersionId: next[0]?.id ?? null });
     },
-    deleteSaved: (id) => set((s) => ({ versions: deleteVersion(storage(), s.versions, id) })),
+    deleteSaved: (id) => set((s) => ({ versions: deleteVersion(storage(), s.versions, id), activeVersionId: s.activeVersionId === id ? null : s.activeVersionId })),
     loadSaved: (id) => {
       const v = get().versions.find((x) => x.id === id);
       if (!v) return;
-      set({ config: v.config, demand: { ...PROFILES[v.demandName], residents: v.residents }, seed: v.seed });
+      set({ config: v.config, demand: { ...PROFILES[v.demandName], residents: clampResidents(v.residents, v.config) }, seed: v.seed, activeVersionId: v.id });
       create_();
     },
     shareLink: () => {
@@ -254,7 +314,7 @@ export const useSimStore = create<SimState>((set, get) => {
       }
       return url;
     },
-    compare: { running: false, rows: [], elapsedMs: null, error: null },
+    compare: NO_COMPARE,
     runCompare: (ids) => {
       const { config, demand, seed, versions, compare } = get();
       if (compare.running) return;
@@ -268,14 +328,15 @@ export const useSimStore = create<SimState>((set, get) => {
         }
       }
       if (candidates.length < COMPARE_MIN) return;
-      set({ compare: { running: true, rows: [], elapsedMs: null, error: null } });
+      set({ compare: { ...NO_COMPARE, running: true } });
       const started = performance.now();
+      const setup: CompareSetup = { demandName: demand.name, residents: demand.residents, seed, currentConfig: candidates.some((c) => c.id === 'current') ? config : null };
       const results = new Map<string, CompareRow>();
       const workers: Worker[] = [];
       const finish = (error: string | null) => {
         for (const w of workers) w.terminate();
         const rows = candidates.map((c) => results.get(c.id)).filter((r): r is CompareRow => r !== undefined);
-        set({ compare: { running: false, rows, elapsedMs: Math.round(performance.now() - started), error } });
+        set({ compare: { running: false, rows, elapsedMs: Math.round(performance.now() - started), error, setup } });
       };
       for (const c of candidates) {
         let worker: Worker;
@@ -295,7 +356,7 @@ export const useSimStore = create<SimState>((set, get) => {
         worker.postMessage(request);
       }
     },
-    clearCompare: () => set({ compare: { running: false, rows: [], elapsedMs: null, error: null } }),
+    clearCompare: () => set({ compare: NO_COMPARE }),
     addVehicle: (tenant = 'visitor') => {
       const { engine } = get();
       if (!engine) return null;
@@ -305,9 +366,10 @@ export const useSimStore = create<SimState>((set, get) => {
     },
     callVehicle: (vehicleId) => {
       const { engine } = get();
-      if (!engine) return;
-      engine.callVehicle(vehicleId);
+      if (!engine) return false;
+      const job = engine.callVehicle(vehicleId);
       get().setSnapshot(engine.snapshot());
+      return job !== null;
     },
     setFailure: (kind, id, down) => {
       const { engine } = get();

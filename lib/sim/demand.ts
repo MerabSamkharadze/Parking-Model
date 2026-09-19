@@ -142,18 +142,23 @@ export class DemandGenerator {
     return `${l()}${l()}-${this.rng.int(100, 999)}-${l()}${l()}`;
   }
 
+  /**
+   * Dimensions consistent with the facility (DECISIONS S39/E10): every car fits a
+   * 5.2 m slot with the parking margin, and rides the 0.2 m shuttle deck under the
+   * 1.9 m clear level height. Oversize = longer than 4.75 m or taller than 1.62 m.
+   */
   private profileFor(cls: SlotClass, ev: boolean): VehicleProfile {
     if (cls === 'oversize') {
       const tall = this.rng.next() < 0.5;
       return {
-        length: tall ? this.rng.uniform(4.6, 5.2) : this.rng.uniform(5.31, 5.6),
+        length: tall ? this.rng.uniform(4.5, 4.75) : this.rng.uniform(4.76, 5.0),
         width: this.rng.uniform(1.85, 2.05),
-        height: tall ? this.rng.uniform(1.66, 1.85) : this.rng.uniform(1.5, 1.64),
+        height: tall ? this.rng.uniform(1.63, 1.68) : this.rng.uniform(1.5, 1.62),
         ev,
       };
     }
     return {
-      length: this.rng.uniform(4.1, 5.0),
+      length: this.rng.uniform(4.0, 4.75),
       width: this.rng.uniform(1.7, 1.95),
       height: this.rng.uniform(1.4, 1.62),
       ev,
@@ -181,8 +186,8 @@ export class DemandGenerator {
   }
 }
 
-/** Oversize classification thresholds (DECISIONS E10). */
+/** Oversize classification thresholds (DECISIONS E10, revised with S39). */
 export function classify(p: VehicleProfile): SlotClass {
-  if (p.length > 5.3 || p.height > 1.65 || p.width > 2.05) return 'oversize';
+  if (p.length > 4.75 || p.height > 1.62 || p.width > 2.05) return 'oversize';
   return p.ev ? 'ev' : 'standard';
 }

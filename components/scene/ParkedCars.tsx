@@ -48,14 +48,12 @@ export function ParkedCars({ cfg, slots, sliding, selectedLevel }: { cfg: Facili
   useLayoutEffect(() => {
     placements.forEach((p, m) => {
       const r = refs.current[m];
-      const length = baked[m]?.length ?? 4.4;
       const write = (paint: InstancedMesh | null, rest: InstancedMesh | null, list: Array<{ s: Slot; paint: number }>) => {
         if (!paint || !rest) return;
         list.forEach((e, i) => {
           const pos = slotPosition(cfg, e.s.id);
           const k = e.s.cls === 'oversize' ? OVERSIZE_SCALE : 1;
-          // at the back of the slot, where the insert animation leaves it (S40)
-          _obj.position.set(pos.x, pos.y, parkedZ(cfg, e.s.id.row, length * k));
+          _obj.position.set(pos.x, pos.y, parkedZ(cfg, e.s.id.row, baked[m].length * k));
           _obj.rotation.set(0, e.s.id.row === 0 ? Math.PI / 2 : -Math.PI / 2, 0);
           _obj.scale.set(k, k, k);
           _obj.updateMatrix();

@@ -14,6 +14,8 @@ import { useMemo, useRef, type RefObject } from 'react';
 import { BufferGeometry, Float32BufferAttribute, type Material, type MeshLambertMaterial, type Vector3 } from 'three';
 import { bounds, layout } from '@/lib/geometry';
 import type { FacilityConfig } from '@/lib/sim/types';
+import { useUiStore } from '@/store/useUiStore';
+import { followed } from './VehiclePool';
 import type { Palette } from './palette';
 import { noiseTexture } from './textures';
 
@@ -22,23 +24,31 @@ export const STREET_NEAR = 12; // z where the pavement meets the road
 export const STREET_FAR = 24;
 export const KERB_LANE_Z = 21.4; // parked cars along the far kerb
 const LID_MIN = 0.12;
+/** The ground around the pit never gets thinner than this in the dollhouse view, so
+ *  street cars stand on asphalt instead of floating (DECISIONS S44). */
+const FRAME_MIN = 0.55;
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
-/** How solid the surface is: see-through from above, opaque at eye level —
- *  unless the camera is looking at something underground (a followed car on
- *  the lift, a slot in focus), when the ground opens up whatever the height. */
+/** How solid the surface is: see-through from above, opaque at eye level — unless
+ *  the camera is looking at something underground (the orbit target below the
+ *  surface), when the ground opens up whatever the height (DECISIONS S43). */
 export function surfaceOpacity(cameraY: number, targetY = 0): number {
   const low = clamp01((8 - cameraY) / 4.5);
   const above = clamp01((targetY + 0.4) / 1.0);
   return LID_MIN + (1 - LID_MIN) * low * above;
 }
 
-/** This frame's surface opacity (written by Ground, read by everything that
- *  sits on the surface and must fade with it: bay pads, lamp pools, lawn, canopy). */
-export const surface = { opacity: LID_MIN, get k() { return (this.opacity - LID_MIN) / (1 - LID_MIN); } };
+/** This frame's lid opacity (written by Ground, read by everything that sits on the
+ *  surface and must fade with it: bay pads, lamp pools, the lawn, the mall canopy). */
+export const surface = {
+  opacity: LID_MIN,
+  get k() {
+    return (this.opacity - LID_MIN) / (1 - LID_MIN);
+  },
+};
 
-/** Fade a material between `min` (dollhouse view) and `max` (street level) with the surface. */
+/** Fade a material between `min` (dollhouse view) and `max` (street level) with the lid. */
 export function useSurfaceFade(ref: RefObject<Material | null>, min: number, max: number): void {
   useFrame(() => {
     const m = ref.current;
@@ -49,6 +59,18 @@ export function useSurfaceFade(ref: RefObject<Material | null>, min: number, max
     m.transparent = o < 0.999;
     m.depthWrite = o > 0.6;
   });
+}
+
+/**
+ * The lid's target opacity this frame (DECISIONS S44): the camera-height rule, except
+ * that a camera looking at something underground — the follow camera on a car below the
+ * surface, the slot view — sees through the lid whatever its height. Section views
+ * (cutaway, shaft) look through the surface too.
+ */
+export function lidTarget(cameraY: number, preset: string, targetBelowGround: boolean, targetY = 0): number {
+  if (preset === 'cutaway' || preset === 'shaft') return LID_MIN;
+  if (preset === 'slot' || (preset === 'follow' && targetBelowGround)) return LID_MIN;
+  return surfaceOpacity(cameraY, targetY);
 }
 
 function dashes(x0: number, x1: number, z: number, dash = 3, gap = 3): BufferGeometry {
@@ -92,19 +114,27 @@ export function Ground({ cfg, palette }: { cfg: FacilityConfig; palette: Palette
   }, []);
 
   // the whole surface fades in as the camera drops towards the street, so the
-  // dollhouse view from above keeps every level readable
-  useFrame(({ camera, controls }) => {
+  // dollhouse view from above keeps every level readable; the lid clears whenever
+  // the camera is meant to look underground (follow / slot / section views)
+  useFrame(({ camera, controls }, dt) => {
+    const { cameraPreset, selectedSlotKey } = useUiStore.getState();
+    const below = (cameraPreset === 'follow' && followed.active && followed.y < -0.3) || (cameraPreset === 'slot' && selectedSlotKey !== null);
     const target = (controls as { target?: Vector3 } | null)?.target;
-    const o = surfaceOpacity(camera.position.y, target ? target.y : 0);
-    surface.opacity = o;
+    const o = lidTarget(camera.position.y, cameraPreset, below, target ? target.y : 0);
+    const section = cameraPreset === 'cutaway' || cameraPreset === 'shaft';
+    const frame = section ? LID_MIN : Math.max(FRAME_MIN, Math.min(1, o + 0.08));
+    const rate = 1 - Math.exp(-Math.min(dt, 0.1) * 6); // ~0.5 s ease, no pops
     const apply = (m: MeshLambertMaterial | null, target: number) => {
-      if (!m || Math.abs(m.opacity - target) < 0.002) return;
-      m.opacity = target;
-      m.transparent = target < 0.999;
-      m.depthWrite = target > 0.6;
+      if (!m) return;
+      const next = Math.abs(m.opacity - target) < 0.002 ? target : m.opacity + (target - m.opacity) * rate;
+      if (next === m.opacity) return;
+      m.opacity = next;
+      m.transparent = next < 0.999;
+      m.depthWrite = next > 0.6;
     };
     apply(lid.current, o);
-    for (const m of fading.current) apply(m, Math.min(1, o + 0.08));
+    surface.opacity = lid.current ? lid.current.opacity : o;
+    for (const m of fading.current) apply(m, frame);
   });
 
   return (

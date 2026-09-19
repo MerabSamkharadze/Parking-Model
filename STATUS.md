@@ -14,6 +14,7 @@ Updated after each milestone. Gates: `pnpm lint`, `pnpm typecheck`, `pnpm test`,
 | M5 versions | ✅ done | `d585183` | saved versions (localStorage, max 12), share `?v=` links, compare mode in Web Workers |
 | M6 failure & polish | ✅ done | `9fdab40` | failure panel, degraded UI, keyboard shortcuts, reduced motion, README screenshots, Lighthouse a11y 100 |
 | M7 presentation (user request, DECISIONS U1) | ✅ done | — | real CC0 car models (instanced, LOD twins), steel rack, street + mall / tower / courtyard, readable bays with a scan sweep, guided tour with follow camera, 60 FPS kept |
+| M8 review fixes (DECISIONS S39–S47) | ✅ done | — | tour and slot views see underground again, physical quarter turn, clear height 1.9 m, shuttle dock + comb arm, deck trolley, pit walls + earth, entry cabins, building wings over the pit |
 
 ## M1 — engine vs SPEC §2 (preset B, weekday demand, seed 42, 24 h)
 
@@ -282,6 +283,29 @@ CONFIG_LIMITS`, `lib/format.ts`, and the live `TimelineStrip` (throughput + queu
   `lib/sim/kinematics.ts › positionAt`.
 - All coordinates: `lib/geometry.ts` (`slotPosition`, `slotX`, `levelY`, `liftY`, `rowZ`,
   `layout().shafts`, `bayPosition`, `bounds`).
+
+## M8 — review fixes (2026-09-19)
+
+A review of HEAD `3723104` (how understandable, how "underground" it reads, how physical
+each part is) found the M7 lid hiding the tour, an impossible insert move, a 1.68 m clear
+height and a rack floating in a void. Everything below is in DECISIONS S39–S47; the
+before pictures are in `out/review/` (gitignored), the after pictures were taken with the
+headless driver at the same moments.
+
+| finding | fix | checked |
+|---|---|---|
+| tour steps 4/5/7 and index → flyTo on L3–L5 showed asphalt (lid opaque under 3.5 m camera height) | `lidTarget`: lid clears for follow-below-ground, slot and section views; follow camera mirrors away from the shaft | `?tour=1` headless: car visible on the platform at L1/L2, in the handover, in the turn, in the pull-out |
+| quarter turn swept neighbours and posts | turn in place, then push; cars parked at the back; posts inset 1.3 m; oversize 1.06 | sweep maths (S40) + follow shots at k = 0.3 / 0.75 |
+| 1.9 m taken as pitch → 1.68 m clear, SUV roof through the slab | pitch = 1.9 + 0.22; shuttle deck 0.2; engine profiles ≤ 1.68 m | `tests/geometry.test.ts`, oversize corridor shot |
+| platform through the waiting shuttle, car through the shuttle body | dock outside the shaft + comb arm; trapezoidal moves | handover shot at k = 0.5 |
+| deck transfer: car gliding 48 m over the roof | L-path on the lane + trolley | far-transfer follow shot |
+| no pit, buildings beside the pit, floating street cars, post tops through the lid | `Pit.tsx`, ghosted wings over the pit, ground ≥ 55 %, posts −0.02 m | isometric / cutaway / tower shots |
+| `elapsedMs < 3000` failed on a loaded machine | < 20 s smoke check | `pnpm test` |
+
+Gates: `pnpm typecheck`, `pnpm lint`, `pnpm test` (69) green. `pnpm build` was not run
+because a dev server was up on :3000 (it wipes `.next` — see M2 notes); run it before the
+next commit to main. Renderer after the fixes (preset B, mall, headless 1440 × 900):
+139 draw calls, 157 k triangles.
 
 ## Left to do
 

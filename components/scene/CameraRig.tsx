@@ -128,6 +128,8 @@ export function cameraGoal(
   }
 }
 
+/** Follow camera offset; its x is mirrored to the side away from the car's shaft
+ *  (`followed.side`), so the view never looks down through a lift platform (S44). */
 const FOLLOW_OFFSET = new Vector3(7, 4.5, 8.5);
 
 /** `prefers-reduced-motion: reduce` → camera cuts instead of flying (SPEC §10 M6). */
@@ -178,7 +180,7 @@ export function CameraRig({
     if (!c) return;
     if (preset === 'follow' && followed.active) {
       g.target.set(followed.x, followed.y + 0.8, followed.z);
-      g.pos.copy(g.target).add(FOLLOW_OFFSET);
+      g.pos.set(g.target.x + FOLLOW_OFFSET.x * followed.side, g.target.y + FOLLOW_OFFSET.y, g.target.z + FOLLOW_OFFSET.z);
       g.active = true;
     }
     if (!g.active) return;
