@@ -279,7 +279,8 @@ will be adjusted.
   `scripts/models/lod.mjs`: normals dropped so the flat-shaded seams weld, meshopt
   simplification at 1 % error → ~52 % of the triangles, flat normals recomputed when
   baked) — invisible at slot-camera distance, 724 k → 375 k triangles for preset C.
-  The slot pad keeps the S2 colours under the car.
+  The slot pad keeps the S2 hues under the car, occupied and EV pulled most of the way to
+  the slab so the field reads as a floor with cars on it, not a grid of lights.
 - **S33 — lighting budget.** Every point light is evaluated by every lit pixel, and the
   ground and lid cover the whole frame, so: at most three level lights (`litLevelsOf`,
   spread top to bottom; a light reaches its neighbours anyway) plus two over the bays;

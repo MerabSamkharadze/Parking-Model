@@ -61,10 +61,13 @@ export function SlotField({
   );
   const colors = useMemo(
     () => ({
+      // the car on the pad is the signal now (real models): occupied and EV pads
+      // keep their S2 hue but sit closer to the slab, so the field reads as a
+      // floor with cars on it rather than a grid of lights
       free: new Color(palette.slabEdge),
-      ev: new Color(palette.lime),
+      ev: new Color(palette.lime).lerp(new Color(palette.slab), 0.5),
       reserved: new Color(palette.amber).lerp(new Color(palette.slab), 0.45),
-      occupied: new Color(palette.data),
+      occupied: new Color(palette.data).lerp(new Color(palette.slab), 0.8),
       called: new Color(palette.clay),
     }),
     [palette],

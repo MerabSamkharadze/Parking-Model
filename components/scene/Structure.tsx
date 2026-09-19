@@ -109,7 +109,7 @@ export function Structure({ cfg, palette }: { cfg: FacilityConfig; palette: Pale
               );
             })}
             {litLevels.has(level) && (
-              <pointLight position={[(l.fieldMinX + l.fieldMaxX) / 2, y - 0.2, 0]} color="#ffd9a0" intensity={60} distance={l.fieldMaxX - l.fieldMinX} decay={2} />
+              <pointLight position={[(l.fieldMinX + l.fieldMaxX) / 2, y - 0.2, 0]} color="#ffd9a0" intensity={36} distance={l.fieldMaxX - l.fieldMinX} decay={2} />
             )}
           </group>
         );
